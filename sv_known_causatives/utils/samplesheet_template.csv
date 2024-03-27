@@ -1,0 +1,2 @@
+sample,lane,fastq_1,fastq_2,sex,phenotype,paternal_id,maternal_id,case_id
+sample_name,1,<FW>,<RV>,1,2,,,case_id
