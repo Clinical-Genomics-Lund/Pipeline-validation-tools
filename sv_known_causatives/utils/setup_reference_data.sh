@@ -2,7 +2,7 @@
 
 if [[ $# -ne 2 ]]; then
     echo "Usage: $0 <summary_table> <out_dir>"
-    echo "Example using container: singularity run -B /fs1 /fs1/jakob/containers/depot.galaxyproject.org-singularity-tabix-1.11--hdfd78af_0.img bash setup_reference_data.sh sv_validation_samples.csv subsets"
+    echo "Example using container: singularity run -B /fs1 <tabix container path> bash setup_reference_data.sh sv_validation_samples.csv subsets"
     exit 1
 fi
 
