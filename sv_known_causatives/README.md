@@ -1,26 +1,15 @@
-NOTE: This is transferred from a draft-repo and will need some cleanup before sharp use.
-
-# Outline
-
-Collection of tools for automated validation of the CMD pipelines. In the first iteration, primarily these two constitutional workflows are considered:
-
-* [Lund WGS workflow](https://github.com/Clinical-Genomics-Lund/nextflow_wgs)
-* [nf-core raredisease workflow](https://github.com/nf-core/raredisease)
-
-The first iteration looks whether known SVs are picked up in a workflow setup.
-
 # Evaluating workflows SV performance
 
 This workflow consists of the following steps:
 
-1. Retrieve a baseline of manually curated variants
-2. Run workflow on corresponding raw data
-3. Extract whether the "baseline" calls where found
+1. Retrieve known causative/non-causative variants
+2. Run the evaluated pipeline
+3. Identify whether correct known calls
 4. Summarize the results
 
-![Schematics](img/pipeline_evaluation_tools_schematics.drawio.png)
+![Schematics](/img/pipeline_evaluation_tools_schematics.drawio.png)
 
-## Preparing manually curated varaints (the "baseline")
+## 1. Prepare manually curated variants
 
 You will need a collection of manually curated variants, i.e. where a specific variant is known to be present.
 
@@ -29,23 +18,24 @@ You will need a collection of manually curated variants, i.e. where a specific v
 
 ### Summary table
 
-Summarize the variants in a table as such:
+The known variants should be summarized in a CSV file in the following format.
 
 | label  | chr  | pos     | type |
 | ------ | ---- | ------- | ---- |
 | label1 | chr7 | 2000100 | DEL  |
 | label2 | chr2 | 1010100 | DEL  |
 
-Name it `summary_table.csv`.
+Below it is named `summary_table.csv`.
 
 ### Collect VCF files
 
 Retrieve the VCF files. If stored on the Isilon backup server (i.e. you are working at CMD in Lund), you might do something like the following (make sure to adapt it to your use case):
 
 ```bash
+vcf_basedir="<path to your vcfs>"
 cat summary.csv | while read entry; do
     label=$(echo ${entry} | cut -f1 -d",")
-    path="/media/isilon/backup_hopper/results/wgs/vcf/${label}.sv.scored.sorted.vcf.gz"
+    path="${vcf_basedir}/${label}.sv.scored.sorted.vcf.gz"
     cp ${path} /path/to/local/baseline
 done
 ```
@@ -58,33 +48,25 @@ baseline/
   label2.sv.scored.sorted.vcf.gz
 ```
 
-### Preparing the baseline files
+### Preparing the files
 
 These files consists of subsets of the VCFs with only the baseline variants.
 
-The variant is retrieved using tabix (assuming bgzipped VCF).
+You can extract these subsets using the utility script `setup_reference_data.sh` (assuming `tabix` in path and `bgzipped` VCF files).
 
-```
-bash setup_reference_data.sh sv_validation_samples.csv subsets
-```
+This will yield a folder with the references.
 
-## Preparing input data
-
-### Retrieving the FASTQ data
-
-First locate the backup files. There are likely found in locations such as:
-
-```
-/media/isilon/backup_hopper/seqdata/NovaSeq/<dirname>/Data/Intensities/BaseCalls/<name>.spring
+```bash
+utils/1_setup_reference_data.sh sv_validation_samples.csv output
 ```
 
-You might be able to localize them using the `find` command. 
+The reference only needs to be generated once per sample.
 
-Next these are unspringed to FASTQ files using the `/fs2/sw/bnf-scripts/unspring_file.pl` script.
+## 2. Execute the evaluation run
 
 ### Preparing input CSVs
 
-To run all the samples, we need one samplesheet per sample. These can be generated using the `generate_samplesheet.sh` script, and a samplesheet template looking as such:
+To run all the samples, we need one samplesheet per sample. These can be generated using the `2_generate_samplesheet.sh` script, and a samplesheet template looking as such:
 
 ```
 sample,lane,fastq_1,fastq_2,sex,phenotype,paternal_id,maternal_id,case_id
@@ -95,12 +77,18 @@ The script inserts the correct paths at the `<FW>` and `<RV>` slots in the sampl
 
 The end results is a folder containing CSV files for each sample.
 
+Example run:
+
+```bash
+utils/2_generate_samplesheet.sh template.csv fastq_folder/ samplesheets_out/
+```
+
 ## Executing the run
 
 A run for each of the input CSVs can be executed using the `start_run.sh` script.
 
 ```bash
-bash start_run.sh csvs_dir/ out_base/ /path/to/main.nf /work/basedir/
+start_run.sh csvs_dir/ out_base/ /path/to/main.nf /work/basedir/
 ```
 
 * `csvs_dir/` - The folder containing each of the sample CSVs produced in the previous step
@@ -162,9 +150,3 @@ sB_double    run   chrX,chrX  40000000,40000000  110      DUP:TANDEM  manta-tidd
 sC_false     base  X          50000000           499      DUP:TANDEM  manta-tiddit-gatk
 sC_false     run   -          -                  -        -           -
 ```
-
-## Future work
-
-* Comparison workflow for SNVs
-  * Compare the number and identities of "pathogenic" and "likely pathogenic" clinvar entries
-
