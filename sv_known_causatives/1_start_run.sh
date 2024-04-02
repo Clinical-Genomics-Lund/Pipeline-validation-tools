@@ -15,7 +15,7 @@ read -p "Do you want to start the runs? (y/n) " -n 1 -r
 echo
 if [[ ${REPLY} =~ ^[Yy]$ ]]; then
     for csv in ${input_csvs}/*.csv; do
-        /fs2/sw/bnf-scripts/start_nextflow_analysis.pl ${csv}
+        /fs2/sw/bnf-scripts/start_nextflow_analysis.pl $(pwd)/${csv}
         sleep 5
     done
 fi
