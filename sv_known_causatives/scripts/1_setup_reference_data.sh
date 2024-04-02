@@ -15,8 +15,6 @@ cat "${summary_table}" | tail -n +2 | cut -f1 -d"," | uniq | while read sample_i
 
     file="${sample_id}_masked.sv.scored.sorted.vcf.gz"
     out_file="${out_dir}/${sample_id}.vcf"
-    # echo "${label} ${type} ${chr} ${pos} ${file}"
-    # echo "${file}"
     zcat "${file}" | grep "^#" > "${out_file}"
 
     echo "Processing sample ID ${sample_id}"
