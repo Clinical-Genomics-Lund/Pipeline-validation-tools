@@ -26,7 +26,7 @@ tail -n +2 ${input_csv} | while read line; do
 
     echo "Looking for matches in ${label}"
     out_fp="${output_dir}/${label}.query_out.vcf"
-    zgrep -v "^#" ${baseline} > "${out_fp}.baseline"
+    grep -v "^#" ${baseline} > "${out_fp}.baseline"
 
     if [[ -f "${out_fp}.match" ]]; then
         echo "${out_fp}.match already exists, skipping"
