@@ -101,7 +101,7 @@ for out in ${output_dir}/*.match; do
     echo -e "${label}\tbase\t${base_chr}\t${base_pos}\t${base_len}\t${base_type}\t${base_caller}"
     echo -e "${label}\trun\t${chr}\t${pos}\t${len}\t${type}\t${caller}"
 done | cut -c1-10000
-# cut -c1-1000 to prevent CSQ flooding terminal with enourmous lines
+# cut -c1-1000 to prevent CSQ flooding terminal with enormous lines
 
 
 
