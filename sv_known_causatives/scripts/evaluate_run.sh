@@ -83,7 +83,7 @@ for out in ${output_dir}/*.match; do
         len=$(cut -f8 ${out} | getinfo "SVLEN")
         type=$(cut -f5 ${out} | tr -d "<" | tr -d ">")
         # FIXME: Double check
-        caller=$(cut -f8 ${out} | getinfo "svdb_origin")
+        caller=$(cut -f8 ${out} | getinfo "set")
     elif [[ "${match_nbr_lines}" -eq 0 ]]; then
         chr="-"
         pos="-"
@@ -96,7 +96,7 @@ for out in ${output_dir}/*.match; do
         len=$(cut -f8 ${out} | getinfo "SVLEN" | concatenate)
         type=$(cut -f5 ${out} | tr -d "<" | tr -d ">" | concatenate)
         # FIXME: Double check
-        caller=$(cut -f8 ${out} | getinfo "svdb_origin" | concatenate)
+        caller=$(cut -f8 ${out} | getinfo "set" | concatenate)
     fi
     echo -e "${label}\tbase\t${base_chr}\t${base_pos}\t${base_len}\t${base_type}\t${base_caller}"
     echo -e "${label}\trun\t${chr}\t${pos}\t${len}\t${type}\t${caller}"
