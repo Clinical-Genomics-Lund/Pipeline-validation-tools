@@ -15,6 +15,11 @@ fi
 input_csv=$1
 output_dir=$2
 
+bnd_distance=25000
+overlap=0.7
+
+echo "Running SVDB with bnd_distance ${bnd_distance} and overlap ${overlap}"
+
 echo "Will write output to ${output_dir}"
 mkdir -p "${output_dir}"
 
@@ -33,8 +38,8 @@ tail -n +2 ${input_csv} | while read line; do
     else
         svdb \
             --query \
-            --bnd_distance 25000 \
-            --overlap 0.7 \
+            --bnd_distance ${bnd_distance} \
+            --overlap ${overlap} \
             --db ${baseline} \
             --query_vcf ${result} \
             --out_occ MATCH | grep -v "^#" | grep "MATCH" > "${out_fp}.match"
