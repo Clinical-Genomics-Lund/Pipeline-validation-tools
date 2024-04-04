@@ -68,18 +68,24 @@ for out in ${output_dir}/*.match; do
         base_len=$(cut -f8 ${baseline} | getinfo "SVLEN")
         base_type=$(cut -f5 ${baseline} | tr -d "<" | tr -d ">")
         base_caller=$(cut -f8 ${baseline} | getinfo "set")
+        base_rank_result=$(cut -f8 ${baseline} | getinfo "RankResult")
+        base_rank_score=$(cut -f8 ${baseline} | getinfo "RankScore")
     elif [[ "${base_nbr_lines}" -eq 1 ]]; then
         base_chr="-"
         base_pos="-"
         base_len="-"
         base_type="-"
         base_caller="-"
+        base_rank_result="-"
+        base_rank_score="-"
     else 
         base_chr=$(cut -f1 ${baseline} | concatenate)
         base_pos=$(cut -f2 ${baseline} | concatenate)
         base_len=$(cut -f8 ${baseline} | getinfo "SVLEN" | concatenate)
         base_type=$(cut -f5 ${baseline} | tr -d "<" | tr -d ">" | concatenate)
         base_caller=$(cut -f8 ${baseline} | getinfo "set" | concatenate)
+        base_rank_result=$(cut -f8 ${baseline} | getinfo "RankResult" | concatenate)
+        base_rank_score=$(cut -f8 ${baseline} | getinfo "RankScore" | concatenate)
     fi
 
     if [[ "${match_nbr_lines}" -eq 1 ]]; then
@@ -87,24 +93,28 @@ for out in ${output_dir}/*.match; do
         pos=$(cut -f2 ${out})
         len=$(cut -f8 ${out} | getinfo "SVLEN")
         type=$(cut -f5 ${out} | tr -d "<" | tr -d ">")
-        # FIXME: Double check
         caller=$(cut -f8 ${out} | getinfo "set")
+        rank_result=$(cut -f8 ${baseline} | getinfo "RankResult")
+        rank_score=$(cut -f8 ${baseline} | getinfo "RankScore")
     elif [[ "${match_nbr_lines}" -eq 0 ]]; then
         chr="-"
         pos="-"
         len="-"
         type="-"
         caller="-"
+        rank_result="-"
+        rank_score="-"
     else
         chr=$(cut -f1 ${out} | concatenate)
         pos=$(cut -f2 ${out} | concatenate)
         len=$(cut -f8 ${out} | getinfo "SVLEN" | concatenate)
         type=$(cut -f5 ${out} | tr -d "<" | tr -d ">" | concatenate)
-        # FIXME: Double check
         caller=$(cut -f8 ${out} | getinfo "set" | concatenate)
+        rank_result=$(cut -f8 ${baseline} | getinfo "RankResult" | concatenate)
+        rank_score=$(cut -f8 ${baseline} | getinfo "RankScore" | concatenate)
     fi
-    echo -e "${label}\tbase\t${base_chr}\t${base_pos}\t${base_len}\t${base_type}\t${base_caller}"
-    echo -e "${label}\trun\t${chr}\t${pos}\t${len}\t${type}\t${caller}"
+    echo -e "${label}\tbase\t${base_chr}\t${base_pos}\t${base_len}\t${base_type}\t${base_caller}\t${base_rank_result}\t${base_rank_score}"
+    echo -e "${label}\trun\t${chr}\t${pos}\t${len}\t${type}\t${caller}\t${rank_result}\t${rank_score}"
 done | cut -c1-10000
 # cut -c1-1000 to prevent CSQ flooding terminal with enormous lines
 
