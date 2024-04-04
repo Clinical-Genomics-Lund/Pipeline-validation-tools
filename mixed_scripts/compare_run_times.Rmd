@@ -1,0 +1,80 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+```{r}
+library(tidyverse)
+library(ggrepel)
+```
+
+```{r}
+live <- read_tsv("24MD02377-trio-live.wgs-hg38_dev.trace.txt")
+verification <- read_tsv("24MD02377-trio-verification.wgs-hg38_validation_2024.trace.txt")
+```
+
+```{r}
+convert_to_ms <- function(time_string) {
+  
+  if (str_detect(time_string, "\\d+ms")) {
+    ms <- str_extract(time_string, "\\d+")
+    return(ms)
+  }
+  
+  parts <- str_extract_all(time_string, "\\d+\\.?\\d*\\s*[hms]")[[1]]
+  
+  total_seconds <- 0
+  
+  for (part in parts) {
+    number <- as.numeric(str_extract(part, "\\d+\\.?\\d*"))
+    
+    if (grepl("h", part)) {
+      total_seconds <- total_seconds + number * 3600
+    } else if (grepl("m", part)) {
+      total_seconds <- total_seconds + number * 60
+    } else if (grepl("s", part)) {
+      total_seconds <- total_seconds + number
+    } else {
+      stop("Unknown part:", part)
+    }
+  }
+  total_seconds * 1000
+}
+
+convert_to_ms("1h 1m 1s") / 1000
+convert_to_ms("1.2m") / 1000
+convert_to_ms("19ms")
+```
+
+
+```{r}
+live_times <- live %>% select(name, realtime) %>% 
+  mutate(seconds=vapply(live$realtime, convert_to_ms, 0)) %>%
+  mutate(base_name=name %>% gsub(" .*", "", .)) %>%
+  select(base_name, seconds) %>%
+  group_by(base_name) %>%
+  summarize(mean_seconds_live=mean(seconds))
+
+verification_times <- verification %>% select(name, realtime) %>% 
+  mutate(seconds=vapply(verification$realtime, convert_to_ms, 0)) %>%
+  mutate(base_name=name %>% gsub(" .*", "", .)) %>%
+  select(base_name, seconds) %>%
+  group_by(base_name) %>%
+  summarize(mean_seconds_verification=mean(seconds))
+
+combined <- left_join(vep103_times, vep111_times)
+
+ggplot(combined, aes(x=mean_seconds_live / 3600, y=mean_seconds_verification / 3600, label=base_name)) + geom_point() + geom_label_repel() + theme_bw()
+
+  #ggplot(aes(x=base_name, y=seconds / 3600)) + geom_point() + theme_bw() +
+  #theme(axis.text.x = element_text(angle=90, vjust = 0.5, hjust=1))
+
+#vep111 %>% select(name, duration) %>% 
+#  mutate(seconds=vapply(vep111$duration, convert_to_seconds, 0)) %>%
+#  mutate(base_name=name %>% gsub(" .*", "", .)) %>%
+#  filter(seconds > 600) %>%
+#  ggplot(aes(x=base_name, y=seconds / 3600)) + geom_point() + theme_bw() +
+#  theme(axis.text.x = element_text(angle=90, vjust = 0.5, hjust=1))
+```
+
+
