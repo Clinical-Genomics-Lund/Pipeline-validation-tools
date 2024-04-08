@@ -115,8 +115,6 @@ def print_summary(outdir: str):
 
 def print_single_summary(match_file: str):
 
-    # print(match_file)
-
     match_file_path = pathlib.Path(match_file)
     label = match_file_path.stem.split('.')[0]
 
@@ -127,26 +125,12 @@ def print_single_summary(match_file: str):
     baseline_path = f"{bare_path}.baseline"
     baseline_content = get_content(baseline_path)
 
-    # print(f"{baseline_path}: {len(baseline_content)}, {match_file_path}: {len(match_content)}")
-
-    # match_nbr_lines = len(match_content)
-    # base_nbr_lines = len(baseline_content)
-
-    base_chr = "-"
-    base_pos = "-" 
-    if len(baseline_content) == 1:
-        content = baseline_content[0]
+    print("---")
+    for content in baseline_content:
         print_entry(label, 'base', content)
-        # print(f"{label}\tbase\t{ch}\t{pos}")
-    
-    if len(match_content) == 1:
-        content = match_content[0]
+
+    for content in match_content:
         print_entry(label, 'match', content)
-
-    #     match_pos = match_content[0].split('\t')[1]
-    #     print(f"{label}\tmatch")
-
-    # print(f"{label}\t{}")
 
 
 def print_entry(label: str, match_type: str, content):
