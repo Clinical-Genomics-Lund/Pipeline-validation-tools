@@ -94,7 +94,7 @@ def run_svdb(bnd_distance: int, overlap: float, baseline: str, query_vcf: str, o
 
     match_lines = list()
     for line in proc.stdout:
-        line = line.decode('utf-8')
+        line = line.decode('utf-8').rstrip()
         if not line.startswith('#') and line.find("MATCH") != -1:
             match_lines.append(line)
 
@@ -106,6 +106,8 @@ def run_svdb(bnd_distance: int, overlap: float, baseline: str, query_vcf: str, o
 def print_summary(outdir: str):
     headers = ['label', 'type', 'chr', 'pos', 'len', 'type', 'callers', 'rank_result', 'rank_score']
 
+    print("\t".join(headers))
+
     pattern = f"{outdir}/*.match"
     for match_file in glob.glob(pattern):
         print_single_summary(match_file)
@@ -116,7 +118,7 @@ def print_single_summary(match_file: str):
     # print(match_file)
 
     match_file_path = pathlib.Path(match_file)
-    label = match_file_path.stem
+    label = match_file_path.stem.split('.')[0]
 
     assert match_file.endswith(".match")
 
@@ -125,18 +127,46 @@ def print_single_summary(match_file: str):
     baseline_path = f"{bare_path}.baseline"
     baseline_content = get_content(baseline_path)
 
-    print(f"{baseline_path}: {len(baseline_content)}, {match_file_path}: {len(match_content)}")
+    # print(f"{baseline_path}: {len(baseline_content)}, {match_file_path}: {len(match_content)}")
 
     # match_nbr_lines = len(match_content)
     # base_nbr_lines = len(baseline_content)
 
+    base_chr = "-"
+    base_pos = "-" 
     if len(baseline_content) == 1:
-        base_chr = baseline_content[0].split('\t')[0]
-        base_chr = baseline_content[0].split('\t')[1]
+        content = baseline_content[0]
+        print_entry(label, 'base', content)
+        # print(f"{label}\tbase\t{ch}\t{pos}")
     
     if len(match_content) == 1:
-        match_chr = match_content[0].split('\t')[0]
-        base_chr = match_content[0].split('\t')[1]
+        content = match_content[0]
+        print_entry(label, 'match', content)
+
+    #     match_pos = match_content[0].split('\t')[1]
+    #     print(f"{label}\tmatch")
+
+    # print(f"{label}\t{}")
+
+
+def print_entry(label: str, match_type: str, content):
+    ch = content.split('\t')[0]
+    pos = content.split('\t')[1]
+    sv_type = content.split('\t')[4].lstrip("<").rstrip(">")
+
+    info = content.split('\t')[7]
+
+    info_dict = dict()
+    for info_str in info.split(';'):
+        (key, val) = info_str.split('=')
+        info_dict[key] = val
+
+    svlen = info_dict['SVLEN']
+    callers = info_dict['set']
+    rank_result = info_dict['RankResult']
+    rank_score = info_dict['RankScore'].split(":")[1]
+
+    print(f"{label}\t{match_type}\t{ch}\t{pos}\t{svlen}\t{sv_type}\t{callers}\t{rank_result}\t{rank_score}")
 
 
 def get_content(fp: str) -> List[str]:
