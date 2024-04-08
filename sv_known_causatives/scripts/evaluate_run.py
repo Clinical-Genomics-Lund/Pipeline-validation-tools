@@ -10,7 +10,6 @@ import io
 def main():
     args = parse_arguments()
 
-    # FIXME: Only needed when actually going to run it?
     if not check_svdb():
         print('"svdb" needs to be available in the PATH variable')
         print("If running on a cluster, you can run it as such:")
@@ -73,8 +72,6 @@ def write_baseline(baseline_vcf_fp: str, out_fp: str):
 
 def run_svdb(bnd_distance: int, overlap: float, baseline: str, query_vcf: str, out_fp: str):
 
-    print(query_vcf)
-
     command = [
         "svdb",
         "--query",
@@ -94,28 +91,16 @@ def run_svdb(bnd_distance: int, overlap: float, baseline: str, query_vcf: str, o
 
     proc = subprocess.Popen(command, stdout=subprocess.PIPE)
 
-    # FIXME: Read the STDOUT
-    # singularity run -B /fs1 <svdb container> python3 Pipeline-validation-tools/sv_known_causatives/scripts/evaluate_run.py --csv eval_spreadsheet_test.csv --outdir testout
+    match_lines = list()
+    for line in proc.stdout:
+        line = line.decode('utf-8')
+        if not line.startswith('#') and line.find("MATCH") != -1:
+            match_lines.append(line)
 
-    # print(result.stdout)
-    # while True:
-    #     line = proc.stdout.readline()
-    #     if not line:
-    #         break
-    #     if not line.startswith("#") and line.find("MATCH") != -1:
-    #         print(line)
-
-    raise ValueError("stop")
-
-
-    # svdb \
-    # --query \
-    # --bnd_distance ${bnd_distance} \
-    # --overlap ${overlap} \
-    # --db ${baseline} \
-    # --query_vcf ${result} \
-    # --out_occ MATCH | grep -v "^#" | grep "MATCH" > "${out_fp}.match"
-
+    if len(match_lines) > 0:
+        with open(out_fp, 'w') as out_fh:
+            for line in match_lines:
+                print(line, file=out_fh)
 
 def print_summary():
     headers = ['label', 'type', 'chr', 'pos', 'len', 'type', 'callers', 'rank_result', 'rank_score']
