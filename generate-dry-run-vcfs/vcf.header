@@ -1,0 +1,33 @@
+##fileformat=VCFv4.2
+##FILTER=<ID=.,Description="All filters passed">
+##FORMAT=<ID=GQ,Number=1,Type=Integer,Description="Genotype quality">
+##FORMAT=<ID=GT,Number=1,Type=String,Description="Genotype">
+##INFO=<ID=FOO,Number=1,Type=Integer,Description="placeholder, ensures non-empty INFO field">
+##INFO=<ID=Pathogenicity,Number=A,Type=String,Description="Pathogenicity predicted by HmtVar">
+##INFO=<ID=RankScoreAtDismissal,Number=1,Type=Integer,Description="Rank score of variant at the time it was dismissed in scout">
+##INFO=<ID=Classification,Number=1,Type=String,Description="Clinvar Classification from source spreadsheet">
+##contig=<ID=1,length=248956422,assembly=hg38>
+##contig=<ID=2,length=242193529,assembly=hg38>
+##contig=<ID=3,length=198295559,assembly=hg38>
+##contig=<ID=4,length=190214555,assembly=hg38>
+##contig=<ID=5,length=181538259,assembly=hg38>
+##contig=<ID=6,length=170805979,assembly=hg38>
+##contig=<ID=7,length=159345973,assembly=hg38>
+##contig=<ID=8,length=145138636,assembly=hg38>
+##contig=<ID=9,length=138394717,assembly=hg38>
+##contig=<ID=10,length=133797422,assembly=hg38>
+##contig=<ID=11,length=135086622,assembly=hg38>
+##contig=<ID=12,length=133275309,assembly=hg38>
+##contig=<ID=13,length=114364328,assembly=hg38>
+##contig=<ID=14,length=107043718,assembly=hg38>
+##contig=<ID=15,length=101991189,assembly=hg38>
+##contig=<ID=16,length=90338345,assembly=hg38>
+##contig=<ID=17,length=83257441,assembly=hg38>
+##contig=<ID=18,length=80373285,assembly=hg38>
+##contig=<ID=19,length=58617616,assembly=hg38>
+##contig=<ID=20,length=64444167,assembly=hg38>
+##contig=<ID=21,length=46709983,assembly=hg38>
+##contig=<ID=22,length=50818468,assembly=hg38>
+##contig=<ID=X,length=156040895,assembly=hg38>
+##contig=<ID=Y,length=57227415,assembly=hg38>
+##contig=<ID=MT,length=16569,assembly=hg38>
