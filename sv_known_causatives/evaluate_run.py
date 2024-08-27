@@ -24,7 +24,7 @@ def main():
         outdir_path.mkdir(parents=True, exist_ok=True)
         match_to_baselines(args.csv, args.outdir, args.force_svdb, args.bnd_distance, args.overlap)
 
-    print_summary(args.outdir, args.output_tsv)
+    print_summary(args.outdir, args.output_tsv, args.trios)
 
 
 def match_to_baselines(csv_fp: str, outdir: str, force_svdb: bool, bnd_distance: int, overlap: float):
@@ -103,20 +103,23 @@ def run_svdb(bnd_distance: int, overlap: float, baseline: str, query_vcf: str, o
             for line in match_lines:
                 print(line, file=out_fh)
 
-def print_summary(outdir: str, output_tsv: bool):
+def print_summary(outdir: str, output_tsv: bool, trios: list[str]):
     
     if not output_tsv:
         headers = ['label', 'type', 'chr', 'pos', 'len', 'type', 'callers', 'rank_result', 'rank_score']
     else:
-        headers = ['Prov-ID', 'Typ', 'Baseline pos', 'Validation pos', 'Baseline längd', 'Validation längd', 'SV-typ', 'Baseline callers', 'Validation callers', 'Poäng produktion', 'Poäng validering', 'prod_subsc', 'val_subsc']
+        headers = ['Prov-ID', 'Typ', 'Prod. pos', 'Val. pos', 'Prod. längd', 'Val. längd', 'SV-typ', 'Prod. callers', 'Val. callers', 'Prod. poäng', 'Val. poäng', 'Prod. subpoäng', 'Val. subpoäng']
     print("\t".join(headers))
 
     pattern = f"{outdir}/*.match"
     for match_file in glob.glob(pattern):
-        print_single_summary(match_file, output_tsv)
+        print_single_summary(match_file, output_tsv, trios)
 
 
-def print_single_summary(match_file: str, output_tsv: bool):
+def print_single_summary(match_file: str, output_tsv: bool, trios: list[str]):
+
+    if len(trios) > 0:
+        print("WARNING: The trios from argparse argument hasn't been tested yet. You are testing it now.")
 
     match_file_path = pathlib.Path(match_file)
     label = match_file_path.stem.split('.')[0]
@@ -161,7 +164,7 @@ def print_single_summary(match_file: str, output_tsv: bool):
 
 
         val_fields = match_content[0].split('\t')
-        val_info = fields[7]
+        val_info = val_fields[7]
         val_info_dict = {}
         for info_str in val_info.split(';'):
             (key, val) = info_str.split('=')
@@ -170,9 +173,17 @@ def print_single_summary(match_file: str, output_tsv: bool):
         val_callers = val_info_dict['set']
         if len(val_callers.split("-")) == 3:
             val_callers = 'all'
-        
 
-        out_cols = [label, "", comb_pos, "val pos", svlen, "svlen val", sv_type, callers, val_callers, rank_score, "-42", rank_result, "<rank result>"]
+        val_ch = val_fields[0]
+        val_pos = val_fields[1]
+        val_comb_pos = f"{val_ch}:{val_pos}"
+        val_sv_len = val_info_dict['SVLEN']
+        val_rank_score = val_info_dict['RankScore'].split(":")[1]
+        val_rank_result = val_info_dict['RankResult']
+
+        sample_type = "Trio" if label in trios else "Singel"
+
+        out_cols = [label, sample_type, comb_pos, val_comb_pos, svlen, val_sv_len, sv_type, callers, val_callers, rank_score, val_rank_score, rank_result, val_rank_result]
         print('\t'.join(out_cols))
 
 
@@ -215,6 +226,7 @@ def parse_arguments():
     parser.add_argument("--force_svdb", action='store_true', help="Rerun all SVDB matches even if already present")
     parser.add_argument("--skip_svdb", action='store_true', help="Don't run SVDB matches at all")
     parser.add_argument("--output_tsv", action='store_true', help="Print the output in TSV format")
+    parser.add_argument("--trios", nargs="*", help="Lab IDs for trios")
 
     args = parser.parse_args()
     return args
