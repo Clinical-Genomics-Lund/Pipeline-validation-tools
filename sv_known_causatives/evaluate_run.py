@@ -24,7 +24,7 @@ def main():
         outdir_path.mkdir(parents=True, exist_ok=True)
         match_to_baselines(args.csv, args.outdir, args.force_svdb, args.bnd_distance, args.overlap)
 
-    print_summary(args.outdir)
+    print_summary(args.outdir, args.output_tsv)
 
 
 def match_to_baselines(csv_fp: str, outdir: str, force_svdb: bool, bnd_distance: int, overlap: float):
@@ -103,17 +103,20 @@ def run_svdb(bnd_distance: int, overlap: float, baseline: str, query_vcf: str, o
             for line in match_lines:
                 print(line, file=out_fh)
 
-def print_summary(outdir: str):
-    headers = ['label', 'type', 'chr', 'pos', 'len', 'type', 'callers', 'rank_result', 'rank_score']
-
+def print_summary(outdir: str, output_tsv: bool):
+    
+    if not output_tsv:
+        headers = ['label', 'type', 'chr', 'pos', 'len', 'type', 'callers', 'rank_result', 'rank_score']
+    else:
+        headers = ['Prov-ID', 'Typ', 'Baseline pos', 'Validation pos', 'Baseline längd', 'Validation längd', 'SV-typ', 'Baseline callers', 'Validation callers', 'Poäng produktion', 'Poäng validering', 'prod_subsc', 'val_subsc']
     print("\t".join(headers))
 
     pattern = f"{outdir}/*.match"
     for match_file in glob.glob(pattern):
-        print_single_summary(match_file)
+        print_single_summary(match_file, output_tsv)
 
 
-def print_single_summary(match_file: str):
+def print_single_summary(match_file: str, output_tsv: bool):
 
     match_file_path = pathlib.Path(match_file)
     label = match_file_path.stem.split('.')[0]
@@ -125,12 +128,52 @@ def print_single_summary(match_file: str):
     baseline_path = f"{bare_path}.baseline"
     baseline_content = get_content(baseline_path)
 
-    print("---")
-    for content in baseline_content:
-        print_entry(label, 'base', content)
+    if not output_tsv:
+        print("---")
+        for content in baseline_content:
+            print_entry(label, 'base', content)
+        for content in match_content:
+            print_entry(label, 'match', content)
+    else:
+        # FIXME: Refactor this single-line printing
+        # Maybe a good coding target with Line? :)
+        base_content = baseline_content[0]
+        fields = base_content.split('\t')
+        ch = fields[0]
+        pos = fields[1]
+        comb_pos = f"{ch}:{pos}"
+        sv_type = fields[4]
+        info = fields[7]
 
-    for content in match_content:
-        print_entry(label, 'match', content)
+        info_dict = dict()
+        for info_str in info.split(';'):
+            (key, val) = info_str.split('=')
+            info_dict[key] = val
+
+        svlen = info_dict['SVLEN']
+        callers = info_dict['set']
+
+        if len(callers.split("-")) == 3:
+            callers = 'all'
+
+        rank_result = info_dict['RankResult']
+        rank_score = info_dict['RankScore'].split(":")[1] 
+
+
+        val_fields = match_content[0].split('\t')
+        val_info = fields[7]
+        val_info_dict = {}
+        for info_str in val_info.split(';'):
+            (key, val) = info_str.split('=')
+            val_info_dict[key] = val
+
+        val_callers = val_info_dict['set']
+        if len(val_callers.split("-")) == 3:
+            val_callers = 'all'
+        
+
+        out_cols = [label, "", comb_pos, "val pos", svlen, "svlen val", sv_type, callers, val_callers, rank_score, "-42", rank_result, "<rank result>"]
+        print('\t'.join(out_cols))
 
 
 def print_entry(label: str, match_type: str, content):
@@ -171,6 +214,7 @@ def parse_arguments():
     parser.add_argument("--overlap", default=0.7)
     parser.add_argument("--force_svdb", action='store_true', help="Rerun all SVDB matches even if already present")
     parser.add_argument("--skip_svdb", action='store_true', help="Don't run SVDB matches at all")
+    parser.add_argument("--output_tsv", action='store_true', help="Print the output in TSV format")
 
     args = parser.parse_args()
     return args
