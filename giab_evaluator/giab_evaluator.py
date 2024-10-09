@@ -2,6 +2,10 @@
 
 import argparse
 from pathlib import Path
+import logging
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
+LOG = logging.getLogger(__name__)
 
 
 def main(results1: Path, results2: Path):
@@ -20,22 +24,20 @@ def check_same_files(results1: Path, results2: Path):
     missing_in_results2 = files_in_results2 - files_in_results1
     missing_in_results1 = files_in_results1 - files_in_results2
 
-    print("Summary of file comparison:")
-    print(f"Total files in {results1}: {len(files_in_results1)}")
-    print(f"Total files in {results2}: {len(files_in_results2)}")
-    print(f"Common files: {len(common_files)}")
-    print(f"Files missing in {results1}: {len(missing_in_results1)}")
-    print(f"Files missing in {results2} {len(missing_in_results2)}")
+    LOG.info("Summary of file comparison:")
+    LOG.info(f"Total files in {results1}: {len(files_in_results1)}")
+    LOG.info(f"Total files in {results2}: {len(files_in_results2)}")
+    LOG.info(f"Common files: {len(common_files)}")
 
     if len(missing_in_results1) > 0:
-        print(f"Files present in {results2} but missing in {results1}")
+        LOG.info(f"Files present in {results2} but missing in {results1}")
         for file in missing_in_results1:
-            print(f"  {file}")
+            LOG.info(f"  {file}")
 
     if len(missing_in_results2) > 0:
-        print(f"Files present in {results1} but missing in {results2}:")
+        LOG.info(f"Files present in {results1} but missing in {results2}:")
         for file in missing_in_results2:
-            print(f"  {file}")
+            LOG.info(f"  {file}")
 
 
 def parse_arguments():
