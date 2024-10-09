@@ -4,7 +4,7 @@ import argparse
 from pathlib import Path
 import logging
 from configparser import ConfigParser
-from typing import List
+from typing import List, Optional
 from collections import defaultdict
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -18,9 +18,23 @@ Description
 """
 
 
-def main(run_id1: str, run_id2: str, results1: Path, results2: Path, config_path: str):
+def main(
+    run_id1: Optional[str],
+    run_id2: Optional[str],
+    results1: Path,
+    results2: Path,
+    config_path: str,
+):
     config = ConfigParser()
     config.read(config_path)
+
+    if run_id1 is None:
+        run_id1 = str(results1.name)
+        LOG.info(f"--run_id1 not set, assigned: {run_id1}")
+
+    if run_id2 is None:
+        run_id2 = str(results2.name)
+        LOG.info(f"--run_id2 not set, assigned: {run_id2}")
 
     check_same_files(
         run_id1,
@@ -98,8 +112,12 @@ def any_is_parent(path: Path, names: List[str]) -> bool:
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--run_id1", "-i1", required=True)
-    parser.add_argument("--run_id2", "-i2", required=True)
+    parser.add_argument(
+        "--run_id1",
+        "-i1",
+        help="The group ID is used in some file names and can differ between runs. If not provided, it is set to the base folder name.",
+    )
+    parser.add_argument("--run_id2", "-i2", help="See --run_id1 help")
     parser.add_argument("--results1", "-r1", required=True)
     parser.add_argument("--results2", "-r2", required=True)
     parser.add_argument("--config", help="Additional configurations", required=True)
