@@ -36,7 +36,7 @@ def check_same_files(results1: Path, results2: Path, ignore_files: List[str]):
     if len(missing_in_results1) > 0:
         LOG.info(f"Files present in {results2} but missing in {results1}")
         for path in missing_in_results1:
-            if str(path.parent) in ignore_files:
+            if any_is_parent(path, ignore_files):
                 print(f"Ignoring contents of: {str(path.parent)}")
                 continue
             LOG.info(f"  {path}")
@@ -44,10 +44,17 @@ def check_same_files(results1: Path, results2: Path, ignore_files: List[str]):
     if len(missing_in_results2) > 0:
         LOG.info(f"Files present in {results1} but missing in {results2}:")
         for path in missing_in_results2:
-            if str(path.parent) in ignore_files:
+            if any_is_parent(path, ignore_files):
                 print(f"Ignoring contents of: {str(path.parent)}")
                 continue
             LOG.info(f"  {path}")
+
+
+def any_is_parent(path: Path, names: List[str]) -> bool:
+    for parent in path.parents:
+        if parent.name in names:
+            return True
+    return False
 
 
 def parse_arguments():
