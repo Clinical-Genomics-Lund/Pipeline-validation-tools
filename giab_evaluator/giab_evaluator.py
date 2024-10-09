@@ -5,6 +5,7 @@ from pathlib import Path
 import logging
 from configparser import ConfigParser
 from typing import List
+from collections import defaultdict
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 LOG = logging.getLogger(__name__)
@@ -33,11 +34,13 @@ def check_same_files(results1: Path, results2: Path, ignore_files: List[str]):
     LOG.info(f"Total files in {results2}: {len(files_in_results2)}")
     LOG.info(f"Common files: {len(common_files)}")
 
+    ignored: defaultdict[str, int] = defaultdict(int)
+
     if len(missing_in_results1) > 0:
         LOG.info(f"Files present in {results2} but missing in {results1}")
         for path in missing_in_results1:
             if any_is_parent(path, ignore_files):
-                print(f"Ignoring contents of: {str(path.parent)}")
+                ignored[str(path.parent)] += 1
                 continue
             LOG.info(f"  {path}")
 
@@ -45,9 +48,14 @@ def check_same_files(results1: Path, results2: Path, ignore_files: List[str]):
         LOG.info(f"Files present in {results1} but missing in {results2}:")
         for path in missing_in_results2:
             if any_is_parent(path, ignore_files):
-                print(f"Ignoring contents of: {str(path.parent)}")
+                ignored[str(path.parent)] += 1
                 continue
             LOG.info(f"  {path}")
+
+    if len(ignored) > 0:
+        print("Ignored")
+        for key, val in ignored.items():
+            print(f"{key}: {val}")
 
 
 def any_is_parent(path: Path, names: List[str]) -> bool:
