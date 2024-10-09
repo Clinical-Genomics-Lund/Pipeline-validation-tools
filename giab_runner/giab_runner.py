@@ -268,7 +268,7 @@ def parse_arguments():
         help="Tag, commit or branch to check out in --repo",
     )
     parser.add_argument(
-        "--basedir",
+        "--baseout",
         required=True,
         help="The base folder into which results folders are created following the pattern: {base}/{label}_{run_type}_{checkout})",
     )
@@ -314,7 +314,7 @@ if __name__ == "__main__":
         args.config,
         args.label,
         args.checkout,
-        Path(args.basedir),
+        Path(args.baseout),
         Path(args.repo),
         args.start_data,
         args.dry,
