@@ -48,7 +48,7 @@ def main(
     )
 
 
-def get_files_in_dir(dir: Path, run_id: str, run_id_placeholder: str) -> list[Path]:
+def get_files_in_dir(dir: Path, run_id: str, run_id_placeholder: str) -> List[Path]:
     processed_files_in_dir = [
         process_file(path.relative_to(dir), run_id, run_id_placeholder)
         for path in dir.rglob("*")
