@@ -160,7 +160,7 @@ def get_single_csv(
 
     case_id = config[run_type]["case"]
     case_dict = config[case_id]
-    case = parse_case(dict(case_dict), start_data)
+    case = parse_case(dict(case_dict), start_data, is_trio=False)
 
     run_csv = CsvEntry(run_label, assay, [case])
     return run_csv
@@ -182,14 +182,14 @@ def get_trio_csv(
     cases: List[Case] = []
     for case_id in case_ids:
         case_dict = config[case_id]
-        case = parse_case(dict(case_dict), start_data)
+        case = parse_case(dict(case_dict), start_data, is_trio=True)
         cases.append(case)
 
     run_csv = CsvEntry(run_label, assay, cases)
     return run_csv
 
 
-def parse_case(case_dict: Dict[str, str], start_data: str) -> Case:
+def parse_case(case_dict: Dict[str, str], start_data: str, is_trio: bool) -> Case:
     if start_data == "vcf":
         fw = case_dict["vcf"]
         rv = case_dict["vcf_tbi"]
@@ -208,8 +208,8 @@ def parse_case(case_dict: Dict[str, str], start_data: str) -> Case:
         case_dict["type"],
         fw,
         rv,
-        mother=case_dict.get("mother"),
-        father=case_dict.get("father"),
+        mother=case_dict.get("mother") if is_trio else None,
+        father=case_dict.get("father") if is_trio else None,
     )
     return case
 
