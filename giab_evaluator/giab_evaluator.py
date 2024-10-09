@@ -12,6 +12,7 @@ LOG = logging.getLogger(__name__)
 
 
 RUN_ID_PLACEHOLDER = "RUNID"
+VCF_SUFFIX = ["vcf", "vcf.gz"]
 
 description = """
 Description
@@ -46,6 +47,25 @@ def main(
         r2_paths,
         config.get("settings", "ignore").split(","),
     )
+
+    r1_vcfs = [path for path in r1_paths if path.suffix in VCF_SUFFIX]
+    r2_vcfs = [path for path in r2_paths if path.suffix in VCF_SUFFIX]
+
+    compare_vcfs(r1_vcfs, r2_vcfs)
+
+    # compare_annotations()
+
+
+def compare_vcfs(r1_vcfs: List[Path], r2_vcfs: List[Path]):
+    for vcf in r1_vcfs:
+        print(vcf)
+    
+    for vcf in r2_vcfs:
+        print(vcf)
+
+
+def compare_annotations(r1_vcf: Path, r2_vcf: Path):
+    pass
 
 
 def get_files_in_dir(dir: Path, run_id: str, run_id_placeholder: str) -> List[Path]:
