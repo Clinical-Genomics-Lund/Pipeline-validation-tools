@@ -1,10 +1,15 @@
 #!/usr/bin/env python3
 
 description = """
-Document here
+The intent of this script is to make running control samples on specific versions of pipelines easy.
 
-Starting point: Run GIAB (or other sample) in a target repo
-End point: Results in a controlled location, ready for further evaluation
+The steps it performs:
+
+1. Check out commit, tag or branch in target repo
+2. Prepare CSV file for the run
+3. Execute the pipeline
+
+It can be configured to run singles, trios and start with FASTQ, BAM and VCF.
 """
 
 import argparse
@@ -43,8 +48,6 @@ def main(
 
     check_valid_repo(LOG, wgs_repo)
     check_valid_checkout(LOG, wgs_repo, checkout)
-
-    # Code is primed and ready for running
     checkout_repo(wgs_repo, checkout)
 
     if not stub_run:
@@ -55,11 +58,9 @@ def main(
     results_dir = base_dir / run_label
     results_dir.mkdir(exist_ok=True, parents=True)
 
-    # Setup for execution
     run_log_path = results_dir / "run.log"
     write_run_log(run_log_path, run_type, label, checkout, config)
 
-    # CSV
     if not config.getboolean(run_type, "trio"):
         csv = get_single_csv(config, run_label, run_type, start_data)
     else:
@@ -74,19 +75,7 @@ def main(
         stub_run,
     )
 
-    joined_command = " ".join(start_nextflow_command)
-    if not dry_run:
-        if not skip_confirmation:
-            confirmation = input(
-                f"Do you want to run the following command:\n{joined_command}\n(y/n) "
-            )
-
-            if confirmation == "y":
-                subprocess.run(start_nextflow_command, check=True)
-            else:
-                LOG.info("Exiting ...")
-    else:
-        LOG.info(joined_command)
+    start_run(start_nextflow_command, dry_run, skip_confirmation)
 
 
 def checkout_repo(repo: Path, commit: str):
@@ -163,31 +152,6 @@ def write_run_log(
             print(f"{key}: {val}", file=out_fh)
 
 
-def parse_case(case_dict: Dict[str, str], start_data: str) -> Case:
-    if start_data == "vcf":
-        fw = case_dict["vcf"]
-        rv = case_dict["vcf_tbi"]
-    elif start_data == "bam":
-        fw = case_dict["bam"]
-        rv = case_dict["bam_bai"]
-    else:
-        fw = case_dict["fq_fw"]
-        rv = case_dict["fq_rv"]
-
-    case = Case(
-        case_dict["id"],
-        case_dict["clarity_pool_id"],
-        case_dict["clarity_sample_id"],
-        case_dict["sex"],
-        case_dict["type"],
-        fw,
-        rv,
-        mother=case_dict.get("mother"),
-        father=case_dict.get("father"),
-    )
-    return case
-
-
 def get_single_csv(
     config: ConfigParser, run_label: str, run_type: str, start_data: str
 ):
@@ -225,6 +189,31 @@ def get_trio_csv(
     return run_csv
 
 
+def parse_case(case_dict: Dict[str, str], start_data: str) -> Case:
+    if start_data == "vcf":
+        fw = case_dict["vcf"]
+        rv = case_dict["vcf_tbi"]
+    elif start_data == "bam":
+        fw = case_dict["bam"]
+        rv = case_dict["bam_bai"]
+    else:
+        fw = case_dict["fq_fw"]
+        rv = case_dict["fq_rv"]
+
+    case = Case(
+        case_dict["id"],
+        case_dict["clarity_pool_id"],
+        case_dict["clarity_sample_id"],
+        case_dict["sex"],
+        case_dict["type"],
+        fw,
+        rv,
+        mother=case_dict.get("mother"),
+        father=case_dict.get("father"),
+    )
+    return case
+
+
 def build_start_nextflow_analysis_cmd(
     start_nextflow_analysis_pl: str,
     csv: Path,
@@ -248,6 +237,24 @@ def build_start_nextflow_analysis_cmd(
         start_nextflow_command.append("'-stub-run'")
 
     return start_nextflow_command
+
+
+def start_run(
+    start_nextflow_command: List[str], dry_run: bool, skip_confirmation: bool
+):
+    joined_command = " ".join(start_nextflow_command)
+    if not dry_run:
+        if not skip_confirmation:
+            confirmation = input(
+                f"Do you want to run the following command:\n{joined_command}\n(y/n) "
+            )
+
+            if confirmation == "y":
+                subprocess.run(start_nextflow_command, check=True)
+            else:
+                LOG.info("Exiting ...")
+    else:
+        LOG.info(joined_command)
 
 
 def parse_arguments():
