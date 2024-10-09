@@ -252,15 +252,31 @@ def build_start_nextflow_analysis_cmd(
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument("--label", required=True)
     parser.add_argument(
-        "--checkout", required=True, help="Tag or commit ID to check out"
+        "--label", required=True, help="Something for you to use to remember the run"
     )
-    parser.add_argument("--outdir", required=True)
-    parser.add_argument("--wgs_repo", required=True)
-    parser.add_argument("--start_data", default="fq", help="fq|bam|vcf")
     parser.add_argument(
-        "--run_type", help="giab_single|giab_trio|seracare", required=True
+        "--checkout",
+        required=True,
+        help="Tag, commit or branch to check out in --repo",
+    )
+    parser.add_argument(
+        "--basedir",
+        required=True,
+        help="The base folder into which results folders are created following the pattern: {base}/{label}_{run_type}_{checkout})",
+    )
+    parser.add_argument(
+        "--repo", required=True, help="Path to the Git repository of the pipeline"
+    )
+    parser.add_argument(
+        "--start_data",
+        default="fq",
+        help="Start run from FASTQ (fq), BAM (bam) or VCF (vcf) (must be present in config)",
+    )
+    parser.add_argument(
+        "--run_type",
+        help="Select run type from the config (i.e. giab-single, giab-trio, seracare ...)",
+        required=True,
     )
     parser.add_argument(
         "--dry",
@@ -268,9 +284,19 @@ def parse_arguments():
         action="store_true",
         help="Go through the motions, but don't execute the pipeline",
     )
-    parser.add_argument("--skip_confirmation", action="store_true")
-    parser.add_argument("--stub", action="store_true", help="Execute a stub run")
-    parser.add_argument("--config", required=True)
+    parser.add_argument(
+        "--skip_confirmation",
+        action="store_true",
+        help="If not set, you will be asked before starting the pipeline run",
+    )
+    parser.add_argument(
+        "--stub", action="store_true", help="Pass the -stub-run flag to the pipeline"
+    )
+    parser.add_argument(
+        "--config",
+        required=True,
+        help="Config file in INI format containing information about run types and cases",
+    )
     args = parser.parse_args()
     return args
 
@@ -281,8 +307,8 @@ if __name__ == "__main__":
         args.config,
         args.label,
         args.checkout,
-        Path(args.outdir),
-        Path(args.wgs_repo),
+        Path(args.basedir),
+        Path(args.repo),
         args.start_data,
         args.dry,
         args.stub,
