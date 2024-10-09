@@ -21,28 +21,40 @@ Description
 def main(
     run_id1: Optional[str],
     run_id2: Optional[str],
-    results1: Path,
-    results2: Path,
+    results1_dir: Path,
+    results2_dir: Path,
     config_path: str,
 ):
     config = ConfigParser()
     config.read(config_path)
 
     if run_id1 is None:
-        run_id1 = str(results1.name)
+        run_id1 = str(results1_dir.name)
         LOG.info(f"--run_id1 not set, assigned: {run_id1}")
 
     if run_id2 is None:
-        run_id2 = str(results2.name)
+        run_id2 = str(results2_dir.name)
         LOG.info(f"--run_id2 not set, assigned: {run_id2}")
 
+    r1_paths = get_files_in_dir(results1_dir, run_id1, RUN_ID_PLACEHOLDER)
+    r2_paths = get_files_in_dir(results2_dir, run_id2, RUN_ID_PLACEHOLDER)
+
     check_same_files(
-        run_id1,
-        run_id2,
-        results1,
-        results2,
+        str(results1_dir),
+        str(results2_dir),
+        r1_paths,
+        r2_paths,
         config.get("settings", "ignore").split(","),
     )
+
+
+def get_files_in_dir(dir: Path, run_id: str, run_id_placeholder: str) -> list[Path]:
+    processed_files_in_dir = [
+        process_file(path.relative_to(dir), run_id, run_id_placeholder)
+        for path in dir.rglob("*")
+        if path.is_file()
+    ]
+    return processed_files_in_dir
 
 
 def process_file(path: Path, run_id: str, id_placeholder: str) -> Path:
@@ -56,33 +68,29 @@ def process_file(path: Path, run_id: str, id_placeholder: str) -> Path:
 
 
 def check_same_files(
-    run_id1: str, run_id2: str, results1: Path, results2: Path, ignore_files: List[str]
+    r1_label: str,
+    r2_label: str,
+    r1_paths: List[Path],
+    r2_paths: List[Path],
+    ignore_files: List[str],
 ):
 
-    files_in_results1 = {
-        process_file(file.relative_to(results1), run_id1, RUN_ID_PLACEHOLDER)
-        for file in results1.rglob("*")
-        if file.is_file()
-    }
-    files_in_results2 = {
-        process_file(file.relative_to(results2), run_id2, RUN_ID_PLACEHOLDER)
-        for file in results2.rglob("*")
-        if file.is_file()
-    }
+    files_in_results1 = set(r1_paths)
+    files_in_results2 = set(r2_paths)
 
     common_files = files_in_results1 & files_in_results2
     missing_in_results2 = files_in_results2 - files_in_results1
     missing_in_results1 = files_in_results1 - files_in_results2
 
     LOG.info("Summary of file comparison:")
-    LOG.info(f"Total files in {results1}: {len(files_in_results1)}")
-    LOG.info(f"Total files in {results2}: {len(files_in_results2)}")
+    LOG.info(f"Total files in {r1_label}: {len(files_in_results1)}")
+    LOG.info(f"Total files in {r2_label}: {len(files_in_results2)}")
     LOG.info(f"Common files: {len(common_files)}")
 
     ignored: defaultdict[str, int] = defaultdict(int)
 
     if len(missing_in_results1) > 0:
-        LOG.info(f"Files present in {results2} but missing in {results1}")
+        LOG.info(f"Files present in {r2_label} but missing in {r1_label}")
         for path in missing_in_results1:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
@@ -90,7 +98,7 @@ def check_same_files(
             LOG.info(f"  {path}")
 
     if len(missing_in_results2) > 0:
-        LOG.info(f"Files present in {results1} but missing in {results2}:")
+        LOG.info(f"Files present in {r1_label} but missing in {r2_label}:")
         for path in missing_in_results2:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
