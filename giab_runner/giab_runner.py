@@ -16,7 +16,6 @@ import argparse
 from pathlib import Path
 import subprocess
 import logging
-import configparser
 from pathlib import Path
 import sys
 from logging import Logger
@@ -43,7 +42,7 @@ def main(
     skip_confirmation: bool,
 ):
 
-    config = configparser.ConfigParser()
+    config = ConfigParser()
     config.read(config_path)
 
     check_valid_repo(LOG, wgs_repo)
