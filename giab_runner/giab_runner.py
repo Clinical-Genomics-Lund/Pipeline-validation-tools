@@ -21,7 +21,7 @@ from pathlib import Path
 import sys
 from logging import Logger
 from configparser import ConfigParser
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from help_classes import Case, CsvEntry
 
@@ -32,7 +32,7 @@ LOG = logging.getLogger(__name__)
 
 def main(
     config_path: str,
-    label: str,
+    label: Optional[str],
     checkout: str,
     base_dir: Path,
     wgs_repo: Path,
@@ -50,16 +50,13 @@ def main(
     check_valid_checkout(LOG, wgs_repo, checkout)
     checkout_repo(wgs_repo, checkout)
 
-    if not stub_run:
-        run_label = f"{run_type}-{label}-{checkout}"
-    else:
-        run_label = f"{run_type}-{label}-{checkout}-stub"
+    run_label = build_run_label(run_type, checkout, label, stub_run)
 
     results_dir = base_dir / run_label
     results_dir.mkdir(exist_ok=True, parents=True)
 
     run_log_path = results_dir / "run.log"
-    write_run_log(run_log_path, run_type, label, checkout, config)
+    write_run_log(run_log_path, run_type, label or "no label", checkout, config)
 
     if not config.getboolean(run_type, "trio"):
         csv = get_single_csv(config, run_label, run_type, start_data)
@@ -76,6 +73,19 @@ def main(
     )
 
     start_run(start_nextflow_command, dry_run, skip_confirmation)
+
+
+def build_run_label(
+    run_type: str, checkout: str, label: Optional[str], stub_run: bool
+) -> str:
+    label_parts = [run_type]
+    if label is not None:
+        label_parts.append(label)
+    label_parts.append(checkout)
+    if stub_run:
+        label_parts.append("stub")
+    run_label = "-".join(label_parts)
+    return run_label
 
 
 def checkout_repo(repo: Path, commit: str):
@@ -259,9 +269,7 @@ def start_run(
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "--label", required=True, help="Something for you to use to remember the run"
-    )
+    parser.add_argument("--label", help="Something for you to use to remember the run")
     parser.add_argument(
         "--checkout",
         required=True,
