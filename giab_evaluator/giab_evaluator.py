@@ -6,13 +6,14 @@ import logging
 from configparser import ConfigParser
 from typing import List, Optional
 from collections import defaultdict
+import gzip
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 LOG = logging.getLogger(__name__)
 
 
 RUN_ID_PLACEHOLDER = "RUNID"
-VCF_SUFFIX = ["vcf", "vcf.gz"]
+VCF_SUFFIX = [".vcf", ".vcf.gz"]
 
 description = """
 Description
@@ -41,8 +42,8 @@ def main(
     r2_paths = get_files_in_dir(results2_dir, run_id2, RUN_ID_PLACEHOLDER)
 
     check_same_files(
-        str(results1_dir),
-        str(results2_dir),
+        results1_dir,
+        results2_dir,
         r1_paths,
         r2_paths,
         config.get("settings", "ignore").split(","),
@@ -51,17 +52,45 @@ def main(
     r1_vcfs = [path for path in r1_paths if path.suffix in VCF_SUFFIX]
     r2_vcfs = [path for path in r2_paths if path.suffix in VCF_SUFFIX]
 
-    compare_vcfs(r1_vcfs, r2_vcfs)
+    compare_vcfs(r1_vcfs, r2_vcfs, run_id1, run_id2)
 
     # compare_annotations()
 
 
-def compare_vcfs(r1_vcfs: List[Path], r2_vcfs: List[Path]):
+def compare_vcfs(r1_vcfs: List[Path], r2_vcfs: List[Path], run_id1: str, run_id2: str):
     for vcf in r1_vcfs:
         print(vcf)
+        is_gzipped = vcf.suffix == ".vcf.gz"
+        path_str = str(vcf).replace(RUN_ID_PLACEHOLDER, run_id1)
+        variants = count_variants(path_str, is_gzipped)
+        print(variants)
     
     for vcf in r2_vcfs:
         print(vcf)
+        is_gzipped = vcf.suffix == ".vcf.gz"
+        path_str = str(vcf).replace(RUN_ID_PLACEHOLDER, run_id2)
+        variants = count_variants(path_str, is_gzipped)
+        print(variants)
+
+
+def count_variants(vcf: str, is_gzipped: bool) -> int:
+    print(f"Processing: {vcf}")
+    if is_gzipped:
+        in_fh = gzip.open(vcf, 'r')
+    else:
+        in_fh = open(vcf, 'rt')
+
+    nbr_entries = 0
+    for line in in_fh:
+        line = line.rstrip()
+        if line.startswith("#"):
+            continue
+        nbr_entries += 1
+
+    in_fh.close()
+    return nbr_entries
+            
+        
 
 
 def compare_annotations(r1_vcf: Path, r2_vcf: Path):
@@ -70,7 +99,7 @@ def compare_annotations(r1_vcf: Path, r2_vcf: Path):
 
 def get_files_in_dir(dir: Path, run_id: str, run_id_placeholder: str) -> List[Path]:
     processed_files_in_dir = [
-        process_file(path.relative_to(dir), run_id, run_id_placeholder)
+        process_file(path, run_id, run_id_placeholder)
         for path in dir.rglob("*")
         if path.is_file()
     ]
@@ -88,15 +117,18 @@ def process_file(path: Path, run_id: str, id_placeholder: str) -> Path:
 
 
 def check_same_files(
-    r1_label: str,
-    r2_label: str,
+    r1_dir: Path,
+    r2_dir: Path,
     r1_paths: List[Path],
     r2_paths: List[Path],
     ignore_files: List[str],
 ):
+    
+    r1_label = str(r1_dir)
+    r2_label = str(r2_dir)
 
-    files_in_results1 = set(r1_paths)
-    files_in_results2 = set(r2_paths)
+    files_in_results1 = set([path.relative_to(r1_dir) for path in r1_paths])
+    files_in_results2 = set([path.relative_to(r2_dir) for path in r2_paths])
 
     common_files = files_in_results1 & files_in_results2
     missing_in_results2 = files_in_results2 - files_in_results1
