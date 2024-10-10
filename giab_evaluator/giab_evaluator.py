@@ -9,6 +9,7 @@ from collections import defaultdict
 import gzip
 import sys
 import difflib
+import re
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 LOG = logging.getLogger(__name__)
@@ -20,6 +21,27 @@ VCF_SUFFIX = [".vcf", ".vcf.gz"]
 description = """
 Description
 """
+
+
+class ScoredVariant:
+    def __init__(
+        self,
+        chr: str,
+        pos: int,
+        ref: str,
+        alt: str,
+        rank_score: int | None,
+        sub_scores: dict[str, int],
+    ):
+        self.chr = chr
+        self.pos = pos
+        self.ref = ref
+        self.alt = alt
+        self.rank_score = rank_score
+        self.sub_scores = sub_scores
+
+    def __str__(self) -> str:
+        return f"{self.chr}:{self.pos} {self.ref}/{self.alt} ({self.rank_score})"
 
 
 class PathObj:
@@ -122,20 +144,50 @@ def main(
         )
 
     # FIXME: Think about how to clean up this
-    # r1_scored_snv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_snv][0]
-    # r2_scored_snv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_snv][0]
+    r1_scored_snv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_snv][0]
+    r2_scored_snv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_snv][0]
     # r1_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
     # r2_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
     r1_scored_yaml = [path for path in r1_paths if path.is_yaml][0]
     r2_scored_yaml = [path for path in r2_paths if path.is_yaml][0]
 
-    # compare_scored_snv(r1_scored_snv_vcf, r2_scored_snv_vcf)
+    compare_scored_snv(r1_scored_snv_vcf, r2_scored_snv_vcf)
     # compare_scored_sv(r1_scored_sv_vcf, r2_scored_sv_vcf)
     compare_yaml(r1_scored_yaml, r2_scored_yaml)
 
 
+def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
+
+    rank_score_pattern = re.compile("RankScore=[\\w-]+:(-?\\w+);")
+    # rank_result_pattern = re.compile("")
+
+    variants: Dict[str, ScoredVariant] = {}
+    with vcf.get_filehandle() as in_fh:
+        for line in in_fh:
+            line = line.rstrip()
+            if line.startswith("#"):
+                continue
+            fields = line.split("\t")
+            chr = fields[0]
+            pos = int(fields[1])
+            ref = fields[3]
+            alt = fields[4]
+            info = fields[7]
+            match = rank_score_pattern.search(info)
+
+            rank_score = None
+            if match is not None:
+                rank_score = int(match.group(1))
+
+            key = f"{chr}_{pos}_{ref}_{alt}"
+            variant = ScoredVariant(chr, pos, ref, alt, rank_score, {})
+            print(variant)
+    return variants
+
+
 def compare_scored_snv(vcf_snv_r1: PathObj, vcf_snv_r2: PathObj):
-    pass
+    parse_vcf(vcf_snv_r1)
+    parse_vcf(vcf_snv_r2)
 
 
 def compare_scored_sv(vcf_sv_r1: PathObj, vcf_sv_r2: PathObj):
