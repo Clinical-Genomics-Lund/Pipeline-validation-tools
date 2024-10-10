@@ -58,19 +58,22 @@ def main(
 
 
 def compare_vcfs(r1_vcfs: List[Path], r2_vcfs: List[Path], run_id1: str, run_id2: str):
+    r1_counts = {}
     for vcf in r1_vcfs:
-        print(vcf)
         is_gzipped = vcf.suffix == ".vcf.gz"
         path_str = str(vcf).replace(RUN_ID_PLACEHOLDER, run_id1)
-        variants = count_variants(path_str, is_gzipped)
-        print(variants)
+        n_variants = count_variants(path_str, is_gzipped)
+        r1_counts[path_str] = n_variants
     
+    r2_counts = {}
     for vcf in r2_vcfs:
-        print(vcf)
         is_gzipped = vcf.suffix == ".vcf.gz"
         path_str = str(vcf).replace(RUN_ID_PLACEHOLDER, run_id2)
-        variants = count_variants(path_str, is_gzipped)
-        print(variants)
+        n_variants = count_variants(path_str, is_gzipped)
+        r2_counts[path_str] = n_variants
+    
+    print(r1_counts)
+    print(r2_counts)
 
 
 def count_variants(vcf: str, is_gzipped: bool) -> int:
