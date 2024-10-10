@@ -156,10 +156,11 @@ def main(
     compare_yaml(r1_scored_yaml, r2_scored_yaml)
 
 
+# FIXME: Next: Can I get the rank score categories from the VCF header?
 def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
 
     rank_score_pattern = re.compile("RankScore=[\\w-]+:(-?\\w+);")
-    # rank_result_pattern = re.compile("")
+    rank_result_pattern = re.compile("RankResult=(-?\\d+(\\|\\d+)+)")
 
     variants: Dict[str, ScoredVariant] = {}
     with vcf.get_filehandle() as in_fh:
@@ -173,15 +174,25 @@ def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
             ref = fields[3]
             alt = fields[4]
             info = fields[7]
-            match = rank_score_pattern.search(info)
+            rank_score_match = rank_score_pattern.search(info)
 
             rank_score = None
-            if match is not None:
-                rank_score = int(match.group(1))
+            if rank_score_match is not None:
+                rank_score = int(rank_score_match.group(1))
+
+            rank_result_match = rank_result_pattern.search(info)
+            if rank_result_match is not None:
+                rank_result = [
+                    int(val) for val in rank_result_match.group(1).split("|")
+                ]
+                print(rank_result)
+            else:
+                print("no match")
 
             key = f"{chr}_{pos}_{ref}_{alt}"
             variant = ScoredVariant(chr, pos, ref, alt, rank_score, {})
-            print(variant)
+            # print(variant)
+            sys.exit(1)
     return variants
 
 
