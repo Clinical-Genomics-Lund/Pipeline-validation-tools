@@ -4,12 +4,13 @@ import argparse
 from pathlib import Path
 import logging
 from configparser import ConfigParser
-from typing import List, Optional, Dict, TextIO
+from typing import List, Optional, Dict, TextIO, Set, Tuple, TypeVar
 from collections import defaultdict
 import gzip
 import sys
 import difflib
 import re
+import itertools
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 LOG = logging.getLogger(__name__)
@@ -17,6 +18,10 @@ LOG = logging.getLogger(__name__)
 
 RUN_ID_PLACEHOLDER = "RUNID"
 VCF_SUFFIX = [".vcf", ".vcf.gz"]
+
+# Used to make the comparison function generic for PathObj and str
+T = TypeVar("T")
+
 
 description = """
 Description
@@ -41,7 +46,7 @@ class ScoredVariant:
         self.sub_scores = sub_scores
 
     def __str__(self) -> str:
-        return f"{self.chr}:{self.pos} {self.ref}/{self.alt} ({self.rank_score} {self.sub_scores})"
+        return f"{self.chr}:{self.pos} {self.ref}/{self.alt} (Score: {self.rank_score})"
 
 
 class PathObj:
@@ -107,8 +112,11 @@ def main(
     results1_dir: Path,
     results2_dir: Path,
     config_path: str,
-    skip_compare_vcfs: bool,
+    comparisons: Optional[Set[str]],
 ):
+
+    # FIXME: Single variable "comparisons" defaulting to "all"?
+
     config = ConfigParser()
     config.read(config_path)
 
@@ -127,40 +135,47 @@ def main(
         results2_dir, run_id2, RUN_ID_PLACEHOLDER, results2_dir, config
     )
 
-    check_same_files(
-        results1_dir,
-        results2_dir,
-        r1_paths,
-        r2_paths,
-        config.get("settings", "ignore").split(","),
-    )
+    if comparisons is None or "file" in comparisons:
+        LOG.info("--- Comparing existing files ---")
+        check_same_files(
+            results1_dir,
+            results2_dir,
+            r1_paths,
+            r2_paths,
+            config.get("settings", "ignore").split(","),
+        )
 
-    r1_vcfs = [path for path in r1_paths if path.is_vcf]
-    r2_vcfs = [path for path in r2_paths if path.is_vcf]
-
-    if not skip_compare_vcfs:
+    if comparisons is None or "vcf" in comparisons:
+        r1_vcfs = [path for path in r1_paths if path.is_vcf]
+        r2_vcfs = [path for path in r2_paths if path.is_vcf]
+        LOG.info("--- Comparing VCF numbers ---")
         compare_vcfs(
             r1_vcfs, r2_vcfs, run_id1, run_id2, str(results1_dir), str(results2_dir)
         )
 
-    # FIXME: Think about how to clean up this
-    r1_scored_snv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_snv][0]
-    r2_scored_snv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_snv][0]
-    # r1_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
-    # r2_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
-    r1_scored_yaml = [path for path in r1_paths if path.is_yaml][0]
-    r2_scored_yaml = [path for path in r2_paths if path.is_yaml][0]
+    if comparisons is None or "score" in comparisons:
+        LOG.info("--- Comparing scored SNV VCFs ---")
+        # FIXME: Cleanup
+        r1_scored_snv_vcf = [vcf for vcf in r1_paths if vcf.is_scored_snv][0]
+        r2_scored_snv_vcf = [vcf for vcf in r2_paths if vcf.is_scored_snv][0]
+        compare_scored_snv(r1_scored_snv_vcf, r2_scored_snv_vcf)
 
-    compare_scored_snv(r1_scored_snv_vcf, r2_scored_snv_vcf)
-    # compare_scored_sv(r1_scored_sv_vcf, r2_scored_sv_vcf)
-    compare_yaml(r1_scored_yaml, r2_scored_yaml)
+    if comparisons is None or "score_sv" in comparisons:
+        LOG.info("--- Comparing scored SV VCFs ---")
+        # r1_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
+        # r2_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
+
+    if comparisons is None or "yaml" in comparisons:
+        r1_scored_yaml = [path for path in r1_paths if path.is_yaml][0]
+        r2_scored_yaml = [path for path in r2_paths if path.is_yaml][0]
+        compare_yaml(r1_scored_yaml, r2_scored_yaml)
 
 
 # FIXME: Next: Can I get the rank score categories from the VCF header?
 def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
 
-    rank_score_pattern = re.compile("RankScore=[\\w-]+:(-?\\w+);")
-    rank_sub_scores_pattern = re.compile("RankResult=(-?\\d+(\\|\\d+)+)")
+    rank_score_pattern = re.compile("RankScore=.+:(-?\\w+);")
+    rank_sub_scores_pattern = re.compile("RankResult=(-?\\d+(\\|-?\\d+)+)")
     sub_score_name_pattern = re.compile('ID=RankResult,.*Description="(.*)">')
 
     rank_sub_score_names = None
@@ -209,18 +224,39 @@ def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
                     raise ValueError("Found rank sub scores, but not header")
                 assert len(rank_sub_score_names) == len(
                     rank_sub_scores
-                ), f"Length of sub score names and values should match, found {rank_sub_score_names} and {rank_sub_scores_match}"
+                ), f"Length of sub score names and values should match, found {rank_sub_score_names} and {rank_sub_scores_match} in line: {line}"
                 sub_scores_dict = dict(zip(rank_sub_score_names, rank_sub_scores))
             variant = ScoredVariant(chr, pos, ref, alt, rank_score, sub_scores_dict)
             variants[key] = variant
-            print(variant)
-            sys.exit(1)
     return variants
 
 
 def compare_scored_snv(vcf_snv_r1: PathObj, vcf_snv_r2: PathObj):
-    parse_vcf(vcf_snv_r1)
-    parse_vcf(vcf_snv_r2)
+    variants_r1 = parse_vcf(vcf_snv_r1)
+    variants_r2 = parse_vcf(vcf_snv_r2)
+
+    (r1_only, r2_only) = make_comparison(
+        str(vcf_snv_r1.real_path),
+        str(vcf_snv_r2.real_path),
+        set(variants_r1.keys()),
+        set(variants_r2.keys()),
+        print_results=True,
+    )
+
+    max_display = 10
+    LOG.info(
+        f"First {min(len(r1_only), max_display)} only found in {vcf_snv_r1.real_path}"
+    )
+    for var in list(r1_only)[0:max_display]:
+        print(variants_r1[var])
+    LOG.info(
+        f"First {min(len(r2_only), max_display)} only found in {vcf_snv_r2.real_path}"
+    )
+    for var in list(r2_only)[0:max_display]:
+        print(variants_r2[var])
+
+    # LOG.info(f"Number variants r1: {len(variants_r1)}")
+    # LOG.info(f"Number variants r2: {len(variants_r2)}")
 
 
 def compare_scored_sv(vcf_sv_r1: PathObj, vcf_sv_r2: PathObj):
@@ -302,21 +338,24 @@ def get_files_in_dir(
 ) -> List[PathObj]:
     processed_files_in_dir = [
         PathObj(path, run_id, run_id_placeholder, base_dir, config)
-        # process_file(path, run_id, run_id_placeholder)
         for path in dir.rglob("*")
         if path.is_file()
     ]
     return processed_files_in_dir
 
 
-# def process_file(path: Path, run_id: str, id_placeholder: str) -> PathObj:
-#     current_name = path.name
-#     if not current_name.startswith(run_id):
-#         return path
+def make_comparison(
+    label1: str, label2: str, set_1: Set[T], set_2: Set[T], print_results: bool
+) -> Tuple[Set[T], Set[T]]:
+    common_files = set_1 & set_2
+    s1_only = set_1 - set_2
+    s2_only = set_2 - set_1
 
-#     updated_name = current_name.replace(run_id, id_placeholder)
-#     updated_path = path.with_name(updated_name)
-#     return updated_path
+    if print_results:
+        LOG.info(f"In common: {len(common_files)}")
+        LOG.info(f"Only in {label1}: {len(s1_only)}")
+        LOG.info(f"Only in {label2}: {len(s2_only)}")
+    return (s1_only, s2_only)
 
 
 def check_same_files(
@@ -336,28 +375,32 @@ def check_same_files(
     files_in_results1 = set(path.relative_path for path in r1_paths)
     files_in_results2 = set(path.relative_path for path in r2_paths)
 
-    common_files = files_in_results1 & files_in_results2
-    missing_in_results2 = files_in_results2 - files_in_results1
-    missing_in_results1 = files_in_results1 - files_in_results2
+    (r1_only, r2_only) = make_comparison(
+        r1_label, r2_label, files_in_results1, files_in_results2, print_results=True
+    )
 
-    LOG.info("Summary of file comparison:")
-    LOG.info(f"Total files in {r1_label}: {len(files_in_results1)}")
-    LOG.info(f"Total files in {r2_label}: {len(files_in_results2)}")
-    LOG.info(f"Common files: {len(common_files)}")
+    # common_files = files_in_results1 & files_in_results2
+    # missing_in_results2 = files_in_results2 - files_in_results1
+    # missing_in_results1 = files_in_results1 - files_in_results2
+
+    # LOG.info("Summary of file comparison:")
+    # LOG.info(f"Total files in {r1_label}: {len(files_in_results1)}")
+    # LOG.info(f"Total files in {r2_label}: {len(files_in_results2)}")
+    # LOG.info(f"Common files: {len(common_files)}")
 
     ignored: defaultdict[str, int] = defaultdict(int)
 
-    if len(missing_in_results1) > 0:
+    if len(r2_only) > 0:
         LOG.info(f"Files present in {r2_label} but missing in {r1_label}")
-        for path in missing_in_results1:
+        for path in r2_only:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
                 continue
             LOG.info(f"  {path}")
 
-    if len(missing_in_results2) > 0:
+    if len(r1_only) > 0:
         LOG.info(f"Files present in {r1_label} but missing in {r2_label}:")
-        for path in missing_in_results2:
+        for path in r1_only:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
                 continue
@@ -387,7 +430,11 @@ def parse_arguments():
     parser.add_argument("--results1", "-r1", required=True)
     parser.add_argument("--results2", "-r2", required=True)
     parser.add_argument("--config", help="Additional configurations", required=True)
-    parser.add_argument("--skip_compare_vcfs", action="store_true")
+    parser.add_argument(
+        "--comparisons",
+        help="Comma separated. Defaults to: all i.e. file,vcf,score,score_sv,yaml",
+        default="all",
+    )
     args = parser.parse_args()
     return args
 
@@ -400,5 +447,5 @@ if __name__ == "__main__":
         Path(args.results1),
         Path(args.results2),
         args.config,
-        args.skip_compare_vcfs,
+        None if args.comparisons == "all" else set(args.comparisons.split(",")),
     )
