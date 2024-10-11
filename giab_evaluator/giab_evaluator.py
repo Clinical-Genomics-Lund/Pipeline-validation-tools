@@ -186,33 +186,38 @@ def main(
         # FIXME: Cleanup
         r1_scored_snv_vcf = [vcf for vcf in r1_paths if vcf.is_scored_snv][0]
         r2_scored_snv_vcf = [vcf for vcf in r2_paths if vcf.is_scored_snv][0]
-        variants_r1 = parse_vcf(r1_scored_snv_vcf)
-        variants_r2 = parse_vcf(r2_scored_snv_vcf)
-        comparison_results = make_comparison(
-            set(variants_r1.keys()),
-            set(variants_r2.keys()),
-        )
-        compare_variant_presence(
-            str(r1_scored_snv_vcf.real_path),
-            str(r2_scored_snv_vcf.real_path),
-            variants_r1,
-            variants_r2,
-            comparison_results,
-        )
-        shared_variants = comparison_results.shared
-        compare_variant_score(
-            shared_variants, variants_r1, variants_r2, show_sub_scores
-        )
+        variant_comparison(r1_scored_snv_vcf, r2_scored_snv_vcf, show_sub_scores)
 
     if comparisons is None or "score_sv" in comparisons:
         LOG.info("--- Comparing scored SV VCFs ---")
-        # r1_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
-        # r2_scored_sv_vcf = [vcf for vcf in r1_vcfs if vcf.is_scored_sv][0]
+        r1_scored_sv_vcf = [vcf for vcf in r1_paths if vcf.is_scored_sv][0]
+        r2_scored_sv_vcf = [vcf for vcf in r2_paths if vcf.is_scored_sv][0]
+        variant_comparison(r1_scored_sv_vcf, r2_scored_sv_vcf, show_sub_scores)
 
     if comparisons is None or "yaml" in comparisons:
         r1_scored_yaml = [path for path in r1_paths if path.is_yaml][0]
         r2_scored_yaml = [path for path in r2_paths if path.is_yaml][0]
         compare_yaml(r1_scored_yaml, r2_scored_yaml)
+
+
+def variant_comparison(
+    r1_scored_vcf: PathObj, r2_scored_vcf: PathObj, show_sub_scores: bool
+):
+    variants_r1 = parse_vcf(r1_scored_vcf)
+    variants_r2 = parse_vcf(r2_scored_vcf)
+    comparison_results = make_comparison(
+        set(variants_r1.keys()),
+        set(variants_r2.keys()),
+    )
+    compare_variant_presence(
+        str(r1_scored_vcf.real_path),
+        str(r2_scored_vcf.real_path),
+        variants_r1,
+        variants_r2,
+        comparison_results,
+    )
+    shared_variants = comparison_results.shared
+    compare_variant_score(shared_variants, variants_r1, variants_r2, show_sub_scores)
 
 
 def compare_variant_score(
@@ -253,7 +258,17 @@ def compare_variant_score(
     ]
 
     any_above_thres_keys = set(r1_above_thres_keys) | set(r2_above_thres_keys)
-    any_above_thres = [diff_scored_variants[key] for key in any_above_thres_keys]
+    diff_scored_any_above_thres = [
+        diff_scored_variants[key] for key in any_above_thres_keys
+    ]
+
+    max_count = 30
+
+    LOG.info(
+        f"Number diffently scored above {score_threshold}: {len(diff_scored_any_above_thres)}"
+    )
+    if len(diff_scored_any_above_thres) > max_count:
+        LOG.info(f"Only printing the {max_count} first")
 
     first_shared_key = list(shared_variants)[0]
     header_fields = ["chr", "pos", "var", "r1", "r2"]
@@ -264,8 +279,10 @@ def compare_variant_score(
             header_fields.append(f"r2_{sub_score}")
     print("\t".join(header_fields))
     for variant in sorted(
-        any_above_thres, key=lambda var: var.r1.get_rank_score(), reverse=True
-    ):
+        diff_scored_any_above_thres,
+        key=lambda var: var.r1.get_rank_score(),
+        reverse=True,
+    )[0:max_count]:
         fields = [
             variant.r1.chr,
             str(variant.r1.pos),
