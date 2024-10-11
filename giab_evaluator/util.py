@@ -94,7 +94,7 @@ class PathObj:
 
 def get_files_ending_with(pattern: str, paths: List[PathObj]) -> List[PathObj]:
     re_pattern = re.compile(pattern)
-    matching = [path for path in paths if re.match(re_pattern, str(path)) is not None]
+    matching = [path for path in paths if re.search(re_pattern, str(path)) is not None]
     # self.is_vcf = str(path).endswith(".vcf") or str(path).endswith(".vcf.gz")
     return matching
 

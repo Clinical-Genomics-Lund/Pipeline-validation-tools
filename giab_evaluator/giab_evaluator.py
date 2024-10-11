@@ -86,9 +86,12 @@ def main(
         is_vcf_pattern = ".vcf$|.vcf.gz$"
         r1_vcfs = get_files_ending_with(is_vcf_pattern, r1_paths)
         r2_vcfs = get_files_ending_with(is_vcf_pattern, r2_paths)
-        compare_vcfs(
-            r1_vcfs, r2_vcfs, run_id1, run_id2, str(results1_dir), str(results2_dir)
-        )
+        if len(r1_vcfs) > 0 or len(r2_vcfs) > 0:
+            compare_vcfs(
+                r1_vcfs, r2_vcfs, run_id1, run_id2, str(results1_dir), str(results2_dir)
+            )
+        else:
+            LOG.warning("No VCFs detected, skipping VCF comparison")
 
     if comparisons is None or "score" in comparisons:
         LOG.info("--- Comparing scored SNV VCFs ---")
@@ -126,7 +129,7 @@ def main(
         LOG.info("--- Comparing YAML ---")
         yaml_pattern = config["settings"]["yaml"]
         r1_scored_yaml = get_single_file_ending_with(yaml_pattern, r1_paths, LOG)
-        r2_scored_yaml = get_single_file_ending_with(yaml_pattern, r1_paths, LOG)
+        r2_scored_yaml = get_single_file_ending_with(yaml_pattern, r2_paths, LOG)
         if r1_scored_yaml and r2_scored_yaml:
             compare_yaml(r1_scored_yaml, r2_scored_yaml)
         else:
@@ -242,9 +245,12 @@ def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj):
         r1_lines = r1_fh.readlines()
         r2_lines = r2_fh.readlines()
 
-        diff = difflib.unified_diff(r1_lines, r2_lines)
+    diff = list(difflib.unified_diff(r1_lines, r2_lines))
+    if len(diff) > 0:
         for line in diff:
             LOG.info(line.rstrip())
+    else:
+        LOG.info("No difference found")
 
 
 def compare_vcfs(
@@ -349,7 +355,7 @@ def check_same_files(
     if len(ignored) > 0:
         LOG.info("Ignored")
         for key, val in ignored.items():
-            LOG.info(f"{key}: {val}")
+            LOG.info(f"  {key}: {val}")
 
 
 def variant_comparison(
