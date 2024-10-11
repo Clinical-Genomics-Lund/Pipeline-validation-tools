@@ -41,7 +41,7 @@ class ScoredVariant:
         self.sub_scores = sub_scores
 
     def __str__(self) -> str:
-        return f"{self.chr}:{self.pos} {self.ref}/{self.alt} ({self.rank_score})"
+        return f"{self.chr}:{self.pos} {self.ref}/{self.alt} ({self.rank_score} {self.sub_scores})"
 
 
 class PathObj:
@@ -160,13 +160,28 @@ def main(
 def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
 
     rank_score_pattern = re.compile("RankScore=[\\w-]+:(-?\\w+);")
-    rank_result_pattern = re.compile("RankResult=(-?\\d+(\\|\\d+)+)")
+    rank_sub_scores_pattern = re.compile("RankResult=(-?\\d+(\\|\\d+)+)")
+    sub_score_name_pattern = re.compile('ID=RankResult,.*Description="(.*)">')
+
+    rank_sub_score_names = None
 
     variants: Dict[str, ScoredVariant] = {}
     with vcf.get_filehandle() as in_fh:
         for line in in_fh:
             line = line.rstrip()
             if line.startswith("#"):
+
+                if rank_sub_score_names is None and line.startswith(
+                    "##INFO=<ID=RankResult,"
+                ):
+                    match = sub_score_name_pattern.search(line)
+                    if match is None:
+                        raise ValueError(
+                            f"Rankscore categories expected but not found in: ${line}"
+                        )
+                    match_string = match.group(1)
+                    rank_sub_score_names = match_string.split("|")
+
                 continue
             fields = line.split("\t")
             chr = fields[0]
@@ -180,18 +195,25 @@ def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
             if rank_score_match is not None:
                 rank_score = int(rank_score_match.group(1))
 
-            rank_result_match = rank_result_pattern.search(info)
-            if rank_result_match is not None:
-                rank_result = [
-                    int(val) for val in rank_result_match.group(1).split("|")
+            rank_sub_scores_match = rank_sub_scores_pattern.search(info)
+            rank_sub_scores = None
+            if rank_sub_scores_match is not None:
+                rank_sub_scores = [
+                    int(val) for val in rank_sub_scores_match.group(1).split("|")
                 ]
-                print(rank_result)
-            else:
-                print("no match")
 
             key = f"{chr}_{pos}_{ref}_{alt}"
-            variant = ScoredVariant(chr, pos, ref, alt, rank_score, {})
-            # print(variant)
+            sub_scores_dict: Dict[str, int] = {}
+            if rank_sub_scores is not None:
+                if rank_sub_score_names is None:
+                    raise ValueError("Found rank sub scores, but not header")
+                assert len(rank_sub_score_names) == len(
+                    rank_sub_scores
+                ), f"Length of sub score names and values should match, found {rank_sub_score_names} and {rank_sub_scores_match}"
+                sub_scores_dict = dict(zip(rank_sub_score_names, rank_sub_scores))
+            variant = ScoredVariant(chr, pos, ref, alt, rank_score, sub_scores_dict)
+            variants[key] = variant
+            print(variant)
             sys.exit(1)
     return variants
 
