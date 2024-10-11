@@ -16,12 +16,11 @@ import argparse
 from pathlib import Path
 import subprocess
 import logging
-import configparser
 from pathlib import Path
 import sys
 from logging import Logger
 from configparser import ConfigParser
-from typing import List, Dict
+from typing import List, Dict, Optional
 
 from help_classes import Case, CsvEntry
 
@@ -32,7 +31,7 @@ LOG = logging.getLogger(__name__)
 
 def main(
     config_path: str,
-    label: str,
+    label: Optional[str],
     checkout: str,
     base_dir: Path,
     wgs_repo: Path,
@@ -43,23 +42,20 @@ def main(
     skip_confirmation: bool,
 ):
 
-    config = configparser.ConfigParser()
+    config = ConfigParser()
     config.read(config_path)
 
     check_valid_repo(LOG, wgs_repo)
     check_valid_checkout(LOG, wgs_repo, checkout)
     checkout_repo(wgs_repo, checkout)
 
-    if not stub_run:
-        run_label = f"{run_type}-{label}-{checkout}"
-    else:
-        run_label = f"{run_type}-{label}-{checkout}-stub"
+    run_label = build_run_label(run_type, checkout, label, stub_run, start_data)
 
     results_dir = base_dir / run_label
     results_dir.mkdir(exist_ok=True, parents=True)
 
     run_log_path = results_dir / "run.log"
-    write_run_log(run_log_path, run_type, label, checkout, config)
+    write_run_log(run_log_path, run_type, label or "no label", checkout, config)
 
     if not config.getboolean(run_type, "trio"):
         csv = get_single_csv(config, run_label, run_type, start_data)
@@ -76,6 +72,20 @@ def main(
     )
 
     start_run(start_nextflow_command, dry_run, skip_confirmation)
+
+
+def build_run_label(
+    run_type: str, checkout: str, label: Optional[str], stub_run: bool, start_data: str
+) -> str:
+    label_parts = [run_type]
+    if label is not None:
+        label_parts.append(label)
+    label_parts.append(checkout)
+    if stub_run:
+        label_parts.append("stub")
+    label_parts.append(start_data)
+    run_label = "-".join(label_parts)
+    return run_label
 
 
 def checkout_repo(repo: Path, commit: str):
@@ -160,7 +170,7 @@ def get_single_csv(
 
     case_id = config[run_type]["case"]
     case_dict = config[case_id]
-    case = parse_case(dict(case_dict), start_data)
+    case = parse_case(dict(case_dict), start_data, is_trio=False)
 
     run_csv = CsvEntry(run_label, assay, [case])
     return run_csv
@@ -182,14 +192,14 @@ def get_trio_csv(
     cases: List[Case] = []
     for case_id in case_ids:
         case_dict = config[case_id]
-        case = parse_case(dict(case_dict), start_data)
+        case = parse_case(dict(case_dict), start_data, is_trio=True)
         cases.append(case)
 
     run_csv = CsvEntry(run_label, assay, cases)
     return run_csv
 
 
-def parse_case(case_dict: Dict[str, str], start_data: str) -> Case:
+def parse_case(case_dict: Dict[str, str], start_data: str, is_trio: bool) -> Case:
     if start_data == "vcf":
         fw = case_dict["vcf"]
         rv = case_dict["vcf_tbi"]
@@ -208,8 +218,8 @@ def parse_case(case_dict: Dict[str, str], start_data: str) -> Case:
         case_dict["type"],
         fw,
         rv,
-        mother=case_dict.get("mother"),
-        father=case_dict.get("father"),
+        mother=case_dict.get("mother") if is_trio else None,
+        father=case_dict.get("father") if is_trio else None,
     )
     return case
 
@@ -259,9 +269,7 @@ def start_run(
 
 def parse_arguments():
     parser = argparse.ArgumentParser(description=description)
-    parser.add_argument(
-        "--label", required=True, help="Something for you to use to remember the run"
-    )
+    parser.add_argument("--label", help="Something for you to use to remember the run")
     parser.add_argument(
         "--checkout",
         required=True,
