@@ -49,7 +49,7 @@ def main(
     check_valid_checkout(LOG, wgs_repo, checkout)
     checkout_repo(wgs_repo, checkout)
 
-    run_label = build_run_label(run_type, checkout, label, stub_run)
+    run_label = build_run_label(run_type, checkout, label, stub_run, start_data)
 
     results_dir = base_dir / run_label
     results_dir.mkdir(exist_ok=True, parents=True)
@@ -75,7 +75,7 @@ def main(
 
 
 def build_run_label(
-    run_type: str, checkout: str, label: Optional[str], stub_run: bool
+    run_type: str, checkout: str, label: Optional[str], stub_run: bool, start_data: str
 ) -> str:
     label_parts = [run_type]
     if label is not None:
@@ -83,6 +83,7 @@ def build_run_label(
     label_parts.append(checkout)
     if stub_run:
         label_parts.append("stub")
+    label_parts.append(start_data)
     run_label = "-".join(label_parts)
     return run_label
 
