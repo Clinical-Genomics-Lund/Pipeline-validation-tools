@@ -4,13 +4,22 @@ import argparse
 from pathlib import Path
 import logging
 from configparser import ConfigParser
-from typing import List, Optional, Dict, TextIO, Set, Tuple, TypeVar
+from typing import (
+    List,
+    Optional,
+    Dict,
+    TextIO,
+    Set,
+    Tuple,
+    TypeVar,
+    NamedTuple,
+    Generic,
+)
 from collections import defaultdict
 import gzip
 import sys
 import difflib
 import re
-import itertools
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 LOG = logging.getLogger(__name__)
@@ -26,6 +35,14 @@ T = TypeVar("T")
 description = """
 Description
 """
+
+
+class Comparison(Generic[T]):
+    # After Python 3.7 a @dataclass can be used instead
+    def __init__(self, r1: Set[T], r2: Set[T], shared: Set[T]):
+        self.r1 = r1
+        self.r2 = r2
+        self.shared = shared
 
 
 class ScoredVariant:
@@ -47,6 +64,16 @@ class ScoredVariant:
 
     def __str__(self) -> str:
         return f"{self.chr}:{self.pos} {self.ref}/{self.alt} (Score: {self.rank_score})"
+
+    def get_rank_score(self) -> int:
+        if self.rank_score is None:
+            raise ValueError(
+                "Rank score not present, check before using 'get_rank_score'"
+            )
+        return self.rank_score
+
+    def get_rank_score_str(self) -> str:
+        return str(self.rank_score) if self.rank_score is not None else ""
 
 
 class PathObj:
@@ -113,6 +140,7 @@ def main(
     results2_dir: Path,
     config_path: str,
     comparisons: Optional[Set[str]],
+    show_sub_scores: bool,
 ):
 
     # FIXME: Single variable "comparisons" defaulting to "all"?
@@ -158,7 +186,23 @@ def main(
         # FIXME: Cleanup
         r1_scored_snv_vcf = [vcf for vcf in r1_paths if vcf.is_scored_snv][0]
         r2_scored_snv_vcf = [vcf for vcf in r2_paths if vcf.is_scored_snv][0]
-        compare_scored_snv(r1_scored_snv_vcf, r2_scored_snv_vcf)
+        variants_r1 = parse_vcf(r1_scored_snv_vcf)
+        variants_r2 = parse_vcf(r2_scored_snv_vcf)
+        comparison_results = make_comparison(
+            set(variants_r1.keys()),
+            set(variants_r2.keys()),
+        )
+        compare_variant_presence(
+            str(r1_scored_snv_vcf.real_path),
+            str(r2_scored_snv_vcf.real_path),
+            variants_r1,
+            variants_r2,
+            comparison_results,
+        )
+        shared_variants = comparison_results.shared
+        compare_variant_score(
+            shared_variants, variants_r1, variants_r2, show_sub_scores
+        )
 
     if comparisons is None or "score_sv" in comparisons:
         LOG.info("--- Comparing scored SV VCFs ---")
@@ -169,6 +213,73 @@ def main(
         r1_scored_yaml = [path for path in r1_paths if path.is_yaml][0]
         r2_scored_yaml = [path for path in r2_paths if path.is_yaml][0]
         compare_yaml(r1_scored_yaml, r2_scored_yaml)
+
+
+def compare_variant_score(
+    shared_variants: Set[str],
+    variants_r1: dict[str, ScoredVariant],
+    variants_r2: dict[str, ScoredVariant],
+    show_sub_scores: bool,
+):
+
+    class DiffScoredVariant:
+        def __init__(self, r1: ScoredVariant, r2: ScoredVariant):
+            self.r1 = r1
+            self.r2 = r2
+
+    diff_scored_variants: Dict[str, DiffScoredVariant] = {}
+
+    for var_key in shared_variants:
+        r1_variant = variants_r1[var_key]
+        r2_variant = variants_r2[var_key]
+        if r1_variant.rank_score != r2_variant.rank_score:
+            diff_scored_variant = DiffScoredVariant(r1_variant, r2_variant)
+            diff_scored_variants[var_key] = diff_scored_variant
+
+    # FIXME: Into the config settings
+    score_threshold = 17
+
+    r1_above_thres_keys = [
+        entry[0]
+        for entry in diff_scored_variants.items()
+        if entry[1].r1.rank_score is not None
+        and entry[1].r1.rank_score >= score_threshold
+    ]
+    r2_above_thres_keys = [
+        entry[0]
+        for entry in diff_scored_variants.items()
+        if entry[1].r2.rank_score is not None
+        and entry[1].r2.rank_score >= score_threshold
+    ]
+
+    any_above_thres_keys = set(r1_above_thres_keys) | set(r2_above_thres_keys)
+    any_above_thres = [diff_scored_variants[key] for key in any_above_thres_keys]
+
+    first_shared_key = list(shared_variants)[0]
+    header_fields = ["chr", "pos", "var", "r1", "r2"]
+    if show_sub_scores:
+        for sub_score in variants_r1[first_shared_key].sub_scores:
+            header_fields.append(f"r1_{sub_score}")
+        for sub_score in variants_r2[first_shared_key].sub_scores:
+            header_fields.append(f"r2_{sub_score}")
+    print("\t".join(header_fields))
+    for variant in sorted(
+        any_above_thres, key=lambda var: var.r1.get_rank_score(), reverse=True
+    ):
+        fields = [
+            variant.r1.chr,
+            str(variant.r1.pos),
+            f"{variant.r1.ref}/{variant.r1.alt}",
+            variant.r1.get_rank_score_str(),
+            variant.r2.get_rank_score_str(),
+        ]
+        if show_sub_scores:
+            for sub_score_val in variant.r1.sub_scores.values():
+                fields.append(str(sub_score_val))
+            for sub_score_val in variant.r2.sub_scores.values():
+                fields.append(str(sub_score_val))
+        print("\t".join(fields))
+        # f"{self.r1}\t{self.r1.get_rank_score_str()}\t{self.r2.rank_score}"
 
 
 # FIXME: Next: Can I get the rank score categories from the VCF header?
@@ -231,27 +342,27 @@ def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
     return variants
 
 
-def compare_scored_snv(vcf_snv_r1: PathObj, vcf_snv_r2: PathObj):
-    variants_r1 = parse_vcf(vcf_snv_r1)
-    variants_r2 = parse_vcf(vcf_snv_r2)
+def compare_variant_presence(
+    label_r1: str,
+    label_r2: str,
+    variants_r1: Dict[str, ScoredVariant],
+    variants_r2: Dict[str, ScoredVariant],
+    comparison_results: Comparison[str],
+):
 
-    (r1_only, r2_only) = make_comparison(
-        str(vcf_snv_r1.real_path),
-        str(vcf_snv_r2.real_path),
-        set(variants_r1.keys()),
-        set(variants_r2.keys()),
-        print_results=True,
-    )
+    r1_only = comparison_results.r1
+    r2_only = comparison_results.r2
+    common = comparison_results.shared
+
+    LOG.info(f"In common: {len(common)}")
+    LOG.info(f"Only in {label_r1}: {len(r1_only)}")
+    LOG.info(f"Only in {label_r2}: {len(r2_only)}")
 
     max_display = 10
-    LOG.info(
-        f"First {min(len(r1_only), max_display)} only found in {vcf_snv_r1.real_path}"
-    )
+    LOG.info(f"First {min(len(r1_only), max_display)} only found in {label_r1}")
     for var in list(r1_only)[0:max_display]:
         print(variants_r1[var])
-    LOG.info(
-        f"First {min(len(r2_only), max_display)} only found in {vcf_snv_r2.real_path}"
-    )
+    LOG.info(f"First {min(len(r2_only), max_display)} only found in {label_r2}")
     for var in list(r2_only)[0:max_display]:
         print(variants_r2[var])
 
@@ -344,18 +455,12 @@ def get_files_in_dir(
     return processed_files_in_dir
 
 
-def make_comparison(
-    label1: str, label2: str, set_1: Set[T], set_2: Set[T], print_results: bool
-) -> Tuple[Set[T], Set[T]]:
-    common_files = set_1 & set_2
+def make_comparison(set_1: Set[T], set_2: Set[T]) -> Comparison[T]:
+    common = set_1 & set_2
     s1_only = set_1 - set_2
     s2_only = set_2 - set_1
 
-    if print_results:
-        LOG.info(f"In common: {len(common_files)}")
-        LOG.info(f"Only in {label1}: {len(s1_only)}")
-        LOG.info(f"Only in {label2}: {len(s2_only)}")
-    return (s1_only, s2_only)
+    return Comparison(s1_only, s2_only, common)
 
 
 def check_same_files(
@@ -375,9 +480,7 @@ def check_same_files(
     files_in_results1 = set(path.relative_path for path in r1_paths)
     files_in_results2 = set(path.relative_path for path in r2_paths)
 
-    (r1_only, r2_only) = make_comparison(
-        r1_label, r2_label, files_in_results1, files_in_results2, print_results=True
-    )
+    comparison = make_comparison(files_in_results1, files_in_results2)
 
     # common_files = files_in_results1 & files_in_results2
     # missing_in_results2 = files_in_results2 - files_in_results1
@@ -390,17 +493,18 @@ def check_same_files(
 
     ignored: defaultdict[str, int] = defaultdict(int)
 
-    if len(r2_only) > 0:
+    # FIXME: Check the r2 / r1 which goes first, are things correct
+    if len(comparison.r2) > 0:
         LOG.info(f"Files present in {r2_label} but missing in {r1_label}")
-        for path in r2_only:
+        for path in comparison.r2:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
                 continue
             LOG.info(f"  {path}")
 
-    if len(r1_only) > 0:
+    if len(comparison.r1) > 0:
         LOG.info(f"Files present in {r1_label} but missing in {r2_label}:")
-        for path in r1_only:
+        for path in comparison.r1:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
                 continue
@@ -435,6 +539,7 @@ def parse_arguments():
         help="Comma separated. Defaults to: all i.e. file,vcf,score,score_sv,yaml",
         default="all",
     )
+    parser.add_argument("--show_sub_scores", action="store_true")
     args = parser.parse_args()
     return args
 
@@ -448,4 +553,5 @@ if __name__ == "__main__":
         Path(args.results2),
         args.config,
         None if args.comparisons == "all" else set(args.comparisons.split(",")),
+        show_sub_scores=args.show_sub_scores,
     )
