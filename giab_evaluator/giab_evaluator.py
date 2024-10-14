@@ -69,6 +69,13 @@ def main(
     config = ConfigParser()
     config.read(config_path)
 
+    if not results1_dir.exists() or not results2_dir.exists():
+        r1_exists = results1_dir.exists()
+        r2_exists = results2_dir.exists()
+        raise ValueError(
+            f"Both results dir must exist. Currently r1: {r1_exists} r2: {r2_exists}"
+        )
+
     if outdir is not None:
         outdir.mkdir(parents=True, exist_ok=True)
         log_file = outdir / "out.log"
