@@ -33,19 +33,6 @@ logger = setup_stdout_logger()
 RUN_ID_PLACEHOLDER = "RUNID"
 VCF_SUFFIX = [".vcf", ".vcf.gz"]
 
-# Used to make the comparison function generic for PathObj and str
-
-
-# FIXME: Early message if the run folder seems incomplete
-# Break early? If not overriding
-
-
-def log_and_write(text: str, fh: Optional[TextIOWrapper]):
-    logger.info(text)
-    if fh is not None:
-        print(text, file=fh)
-
-
 description = """
 Compare results for runs in the CMD constitutional pipeline.
 
@@ -58,6 +45,12 @@ Performs all or a subset of the comparisons:
 """
 
 
+def log_and_write(text: str, fh: Optional[TextIOWrapper]):
+    logger.info(text)
+    if fh is not None:
+        print(text, file=fh)
+
+
 def main(
     run_id1: Optional[str],
     run_id2: Optional[str],
@@ -67,6 +60,7 @@ def main(
     comparisons: Optional[Set[str]],
     show_sub_scores: bool,
     score_threshold: int,
+    max_display: int,
     outdir: Optional[Path],
 ):
 
@@ -144,6 +138,7 @@ def main(
                 r2_scored_snv_vcf,
                 show_sub_scores,
                 score_threshold,
+                max_display,
                 out_path_presence,
                 out_path_score,
             )
@@ -168,6 +163,7 @@ def main(
                 r2_scored_sv_vcf,
                 show_sub_scores,
                 score_threshold,
+                max_display,
                 out_path_presence,
                 out_path_score,
             )
@@ -227,6 +223,48 @@ def check_same_files(
         log_and_write("Ignored", out_fh)
         for key, val in ignored.items():
             log_and_write(f"  {key}: {val}", out_fh)
+
+    if out_fh:
+        out_fh.close()
+
+
+def compare_variant_presence(
+    label_r1: str,
+    label_r2: str,
+    variants_r1: Dict[str, ScoredVariant],
+    variants_r2: Dict[str, ScoredVariant],
+    comparison_results: Comparison[str],
+    max_display: int,
+    out_path: Optional[Path],
+):
+
+    r1_only = comparison_results.r1
+    r2_only = comparison_results.r2
+    common = comparison_results.shared
+
+    out_fh = open(out_path, "w") if out_path else None
+
+    log_and_write(f"In common: {len(common)}", out_fh)
+    log_and_write(f"Only in {label_r1}: {len(r1_only)}", out_fh)
+    log_and_write(f"Only in {label_r2}: {len(r2_only)}", out_fh)
+
+    # Only show max max_display in STDOUT
+    logger.info(f"First {min(len(r1_only), max_display)} only found in {label_r1}")
+    for var in list(r1_only)[0:max_display]:
+        logger.info(str(variants_r1[var]))
+    logger.info(f"First {min(len(r2_only), max_display)} only found in {label_r2}")
+    for var in list(r2_only)[0:max_display]:
+        logger.info(str(variants_r2[var]))
+
+    # Write all to file
+    print(f"Only found in {label_r1}", file=out_fh)
+    for var in list(r1_only):
+        print(str(variants_r1[var]), file=out_fh)
+    print(
+        f"First {min(len(r2_only), max_display)} only found in {label_r2}", file=out_fh
+    )
+    for var in list(r2_only):
+        print(str(variants_r2[var]), file=out_fh)
 
     if out_fh:
         out_fh.close()
@@ -313,41 +351,6 @@ def compare_variant_score(
         out_fh.close()
 
 
-def compare_variant_presence(
-    label_r1: str,
-    label_r2: str,
-    variants_r1: Dict[str, ScoredVariant],
-    variants_r2: Dict[str, ScoredVariant],
-    comparison_results: Comparison[str],
-    out_path: Optional[Path],
-):
-
-    r1_only = comparison_results.r1
-    r2_only = comparison_results.r2
-    common = comparison_results.shared
-
-    out_fh = open(out_path, "w") if out_path else None
-
-    log_and_write(f"In common: {len(common)}", out_fh)
-    log_and_write(f"Only in {label_r1}: {len(r1_only)}", out_fh)
-    log_and_write(f"Only in {label_r2}: {len(r2_only)}", out_fh)
-
-    max_display = 10
-    log_and_write(
-        f"First {min(len(r1_only), max_display)} only found in {label_r1}", out_fh
-    )
-    for var in list(r1_only)[0:max_display]:
-        log_and_write(str(variants_r1[var]), out_fh)
-    log_and_write(
-        f"First {min(len(r2_only), max_display)} only found in {label_r2}", out_fh
-    )
-    for var in list(r2_only)[0:max_display]:
-        log_and_write(str(variants_r2[var]), out_fh)
-
-    if out_fh:
-        out_fh.close()
-
-
 def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj, out_path: Optional[Path]):
     with yaml_r1.get_filehandle() as r1_fh, yaml_r2.get_filehandle() as r2_fh:
         r1_lines = r1_fh.readlines()
@@ -413,6 +416,7 @@ def variant_comparison(
     r2_scored_vcf: PathObj,
     show_sub_scores: bool,
     score_threshold: int,
+    max_display: int,
     out_path_presence: Optional[Path],
     out_path_score: Optional[Path],
 ):
@@ -428,17 +432,17 @@ def variant_comparison(
         variants_r1,
         variants_r2,
         comparison_results,
+        max_display,
         out_path_presence,
     )
     shared_variants = comparison_results.shared
-    max_count = 30
     compare_variant_score(
         shared_variants,
         variants_r1,
         variants_r2,
         show_sub_scores,
         score_threshold,
-        max_count,
+        max_display,
         out_path_score,
     )
 
@@ -466,6 +470,12 @@ def parse_arguments():
         help="Limit score comparisons to above this threshold",
         default=17,
     )
+    parser.add_argument(
+        "--max_display",
+        type=int,
+        default=15,
+        help="Max number of top variants to print to STDOUT",
+    )
     parser.add_argument("--outdir", help="Optional output folder to store result files")
     args = parser.parse_args()
     return args
@@ -482,5 +492,6 @@ if __name__ == "__main__":
         None if args.comparisons == "all" else set(args.comparisons.split(",")),
         args.show_sub_scores,
         args.score_threshold,
+        args.max_display,
         Path(args.outdir) if args.outdir is not None else None,
     )
