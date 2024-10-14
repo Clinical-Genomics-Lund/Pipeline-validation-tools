@@ -132,7 +132,12 @@ def main(
         )
         if r1_scored_snv_vcf and r2_scored_snv_vcf:
             out_path_presence = outdir / "scored_snv_presence.txt" if outdir else None
-            out_path_score = outdir / "scored_snv_score.txt" if outdir else None
+            out_path_score_thres = (
+                outdir / f"scored_snv_score_thres_{score_threshold}.txt"
+                if outdir
+                else None
+            )
+            out_path_score_all = outdir / "scored_snv_score_all.txt" if outdir else None
             variant_comparison(
                 r1_scored_snv_vcf,
                 r2_scored_snv_vcf,
@@ -140,12 +145,11 @@ def main(
                 score_threshold,
                 max_display,
                 out_path_presence,
-                out_path_score,
+                out_path_score_thres,
+                out_path_score_all,
             )
         else:
             logger.warning("Skipping VCF comparison")
-
-    # FIXME: Annotation comparison
 
     if comparisons is None or "score_sv" in comparisons:
         logger.info("--- Comparing scored SV VCFs ---")
@@ -156,8 +160,13 @@ def main(
             config["settings"]["scored_sv"], r1_paths
         )
         if r1_scored_sv_vcf and r2_scored_sv_vcf:
-            out_path_presence = outdir / "scored_snv_presence.txt" if outdir else None
-            out_path_score = outdir / "scored_snv_score.txt" if outdir else None
+            out_path_presence = outdir / "scored_sv_presence.txt" if outdir else None
+            out_path_score_thres = (
+                outdir / f"scored_sv_score_thres_{score_threshold}.txt"
+                if outdir
+                else None
+            )
+            out_path_score_all = outdir / "scored_sv_score.txt" if outdir else None
             variant_comparison(
                 r1_scored_sv_vcf,
                 r2_scored_sv_vcf,
@@ -165,7 +174,8 @@ def main(
                 score_threshold,
                 max_display,
                 out_path_presence,
-                out_path_score,
+                out_path_score_thres,
+                out_path_score_all,
             )
         else:
             logger.warning("Skipping scored SV VCF comparison")
@@ -202,18 +212,17 @@ def check_same_files(
 
     out_fh = open(out_path, "w") if out_path else None
 
-    # FIXME: Check the r2 / r1 which goes first, are things correct
-    if len(comparison.r2) > 0:
-        log_and_write(f"Files present in {r2_label} but missing in {r1_label}", out_fh)
-        for path in comparison.r2:
+    if len(comparison.r1) > 0:
+        log_and_write(f"Files present in {r1_label} but missing in {r2_label}:", out_fh)
+        for path in comparison.r1:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
                 continue
             log_and_write(f"  {path}", out_fh)
 
-    if len(comparison.r1) > 0:
-        log_and_write(f"Files present in {r1_label} but missing in {r2_label}:", out_fh)
-        for path in comparison.r1:
+    if len(comparison.r2) > 0:
+        log_and_write(f"Files present in {r2_label} but missing in {r1_label}", out_fh)
+        for path in comparison.r2:
             if any_is_parent(path, ignore_files):
                 ignored[str(path.parent)] += 1
                 continue
@@ -270,101 +279,42 @@ def compare_variant_presence(
         out_fh.close()
 
 
-def compare_variant_score(
-    shared_variants: Set[str],
-    variants_r1: Dict[str, ScoredVariant],
-    variants_r2: Dict[str, ScoredVariant],
+def variant_comparison(
+    r1_scored_vcf: PathObj,
+    r2_scored_vcf: PathObj,
     show_sub_scores: bool,
     score_threshold: int,
-    max_count: int,
-    out_path: Optional[Path],
+    max_display: int,
+    out_path_presence: Optional[Path],
+    out_path_score_above_thres: Optional[Path],
+    out_path_score_all: Optional[Path],
 ):
-
-    class DiffScoredVariant:
-        def __init__(self, r1: ScoredVariant, r2: ScoredVariant):
-            self.r1 = r1
-            self.r2 = r2
-
-    diff_scored_variants: Dict[str, DiffScoredVariant] = {}
-
-    for var_key in shared_variants:
-        r1_variant = variants_r1[var_key]
-        r2_variant = variants_r2[var_key]
-        if r1_variant.rank_score != r2_variant.rank_score:
-            diff_scored_variant = DiffScoredVariant(r1_variant, r2_variant)
-            diff_scored_variants[var_key] = diff_scored_variant
-
-    r1_above_thres_keys = [
-        entry[0]
-        for entry in diff_scored_variants.items()
-        if entry[1].r1.rank_score is not None
-        and entry[1].r1.rank_score >= score_threshold
-    ]
-    r2_above_thres_keys = [
-        entry[0]
-        for entry in diff_scored_variants.items()
-        if entry[1].r2.rank_score is not None
-        and entry[1].r2.rank_score >= score_threshold
-    ]
-
-    any_above_thres_keys = set(r1_above_thres_keys) | set(r2_above_thres_keys)
-    diff_scored_any_above_thres = [
-        diff_scored_variants[key] for key in any_above_thres_keys
-    ]
-
-    out_fh = open(out_path, "w") if out_path else None
-
-    log_and_write(
-        f"Number differently scored above {score_threshold}: {len(diff_scored_any_above_thres)}",
-        out_fh,
+    variants_r1 = parse_vcf(r1_scored_vcf)
+    variants_r2 = parse_vcf(r2_scored_vcf)
+    comparison_results = do_comparison(
+        set(variants_r1.keys()),
+        set(variants_r2.keys()),
     )
-    if len(diff_scored_any_above_thres) > max_count:
-        log_and_write(f"Only printing the {max_count} first", out_fh)
-
-    first_shared_key = list(shared_variants)[0]
-    header_fields = ["chr", "pos", "var", "r1", "r2"]
-    if show_sub_scores:
-        for sub_score in variants_r1[first_shared_key].sub_scores:
-            header_fields.append(f"r1_{sub_score}")
-        for sub_score in variants_r2[first_shared_key].sub_scores:
-            header_fields.append(f"r2_{sub_score}")
-    # FIXME: Looks like a util to extract here
-    log_and_write("\t".join(header_fields), out_fh)
-
-    sorted_diff_scored_variants = sorted(
-        diff_scored_any_above_thres,
-        key=lambda var: var.r1.get_rank_score(),
-        reverse=True,
+    compare_variant_presence(
+        str(r1_scored_vcf.real_path),
+        str(r2_scored_vcf.real_path),
+        variants_r1,
+        variants_r2,
+        comparison_results,
+        max_display,
+        out_path_presence,
     )
-
-    # Only print a subset to STDOUT
-    for variant in sorted_diff_scored_variants[0:max_count]:
-        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
-        logger.info(comparison_str)
-
-    # Print all to the log file
-    for variant in sorted_diff_scored_variants:
-        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
-        print(comparison_str, file=out_fh)
-
-    if out_fh:
-        out_fh.close()
-
-
-def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj, out_path: Optional[Path]):
-    with yaml_r1.get_filehandle() as r1_fh, yaml_r2.get_filehandle() as r2_fh:
-        r1_lines = r1_fh.readlines()
-        r2_lines = r2_fh.readlines()
-
-    out_fh = open(out_path, "w") if out_path else None
-    diff = list(difflib.unified_diff(r1_lines, r2_lines))
-    if len(diff) > 0:
-        for line in diff:
-            log_and_write(line.rstrip(), out_fh)
-    else:
-        log_and_write("No difference found", out_fh)
-    if out_fh:
-        out_fh.close()
+    shared_variants = comparison_results.shared
+    compare_variant_score(
+        shared_variants,
+        variants_r1,
+        variants_r2,
+        show_sub_scores,
+        score_threshold,
+        max_display,
+        out_path_score_above_thres,
+        out_path_score_all,
+    )
 
 
 def compare_vcfs(
@@ -411,40 +361,105 @@ def compare_vcfs(
         out_fh.close()
 
 
-def variant_comparison(
-    r1_scored_vcf: PathObj,
-    r2_scored_vcf: PathObj,
+def compare_variant_score(
+    shared_variants: Set[str],
+    variants_r1: Dict[str, ScoredVariant],
+    variants_r2: Dict[str, ScoredVariant],
     show_sub_scores: bool,
     score_threshold: int,
-    max_display: int,
-    out_path_presence: Optional[Path],
-    out_path_score: Optional[Path],
+    max_count: int,
+    out_path_above_thres: Optional[Path],
+    out_path_all: Optional[Path],
 ):
-    variants_r1 = parse_vcf(r1_scored_vcf)
-    variants_r2 = parse_vcf(r2_scored_vcf)
-    comparison_results = do_comparison(
-        set(variants_r1.keys()),
-        set(variants_r2.keys()),
+
+    class DiffScoredVariant:
+        def __init__(self, r1: ScoredVariant, r2: ScoredVariant):
+            self.r1 = r1
+            self.r2 = r2
+
+        def any_above_thres(self) -> bool:
+            r1_above_thres = (
+                r1_variant.rank_score is not None
+                and r1_variant.rank_score >= score_threshold
+            )
+            r2_above_thres = (
+                r2_variant.rank_score is not None
+                and r2_variant.rank_score >= score_threshold
+            )
+            any_above_thres = r1_above_thres or r2_above_thres
+            return any_above_thres
+
+    diff_scored_variants: List[DiffScoredVariant] = []
+
+    for var_key in shared_variants:
+        r1_variant = variants_r1[var_key]
+        r2_variant = variants_r2[var_key]
+        if r1_variant.rank_score != r2_variant.rank_score:
+            diff_scored_variant = DiffScoredVariant(r1_variant, r2_variant)
+            diff_scored_variants.append(diff_scored_variant)
+
+    diff_scored_variants.sort(
+        key=lambda var: var.r1.get_rank_score(),
+        reverse=True,
     )
-    compare_variant_presence(
-        str(r1_scored_vcf.real_path),
-        str(r2_scored_vcf.real_path),
-        variants_r1,
-        variants_r2,
-        comparison_results,
-        max_display,
-        out_path_presence,
+
+    above_thres_variants = [
+        var for var in diff_scored_variants if var.any_above_thres()
+    ]
+
+    out_above_thres = open(out_path_above_thres, "w") if out_path_above_thres else None
+
+    logger.info(
+        f"Number differently scored total: {len(diff_scored_variants)}",
     )
-    shared_variants = comparison_results.shared
-    compare_variant_score(
-        shared_variants,
-        variants_r1,
-        variants_r2,
-        show_sub_scores,
-        score_threshold,
-        max_display,
-        out_path_score,
+    logger.info(
+        f"Number differently scored above {score_threshold}: {len(above_thres_variants)}",
     )
+    if len(above_thres_variants) > max_count:
+        log_and_write(f"Only printing the {max_count} first", out_above_thres)
+
+    # Print header, optionally with sub scores
+    first_shared_key = list(shared_variants)[0]
+    header_fields = ["chr", "pos", "var", "r1", "r2"]
+    if show_sub_scores:
+        for sub_score in variants_r1[first_shared_key].sub_scores:
+            header_fields.append(f"r1_{sub_score}")
+        for sub_score in variants_r2[first_shared_key].sub_scores:
+            header_fields.append(f"r2_{sub_score}")
+    log_and_write("\t".join(header_fields), out_above_thres)
+
+    # Only print a subset to STDOUT
+    for variant in above_thres_variants[0:max_count]:
+        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        logger.info(comparison_str)
+
+    # Print all to the out dir
+    for variant in above_thres_variants:
+        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        print(comparison_str, file=out_above_thres)
+
+    for variant in diff_scored_variants:
+        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        print(comparison_str, file=out_above_thres)
+
+    if out_above_thres:
+        out_above_thres.close()
+
+
+def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj, out_path: Optional[Path]):
+    with yaml_r1.get_filehandle() as r1_fh, yaml_r2.get_filehandle() as r2_fh:
+        r1_lines = r1_fh.readlines()
+        r2_lines = r2_fh.readlines()
+
+    out_fh = open(out_path, "w") if out_path else None
+    diff = list(difflib.unified_diff(r1_lines, r2_lines))
+    if len(diff) > 0:
+        for line in diff:
+            log_and_write(line.rstrip(), out_fh)
+    else:
+        log_and_write("No difference found", out_fh)
+    if out_fh:
+        out_fh.close()
 
 
 def parse_arguments():
