@@ -13,7 +13,7 @@ from typing import (
 from collections import defaultdict
 import difflib
 
-from giab_evaluator.classes import DiffScoredVariant
+from classes import DiffScoredVariant
 from util import (
     Comparison,
     ScoredVariant,
@@ -191,7 +191,7 @@ def main(
         r1_scored_yaml = get_single_file_ending_with(yaml_pattern, r1_paths)
         r2_scored_yaml = get_single_file_ending_with(yaml_pattern, r2_paths)
         if r1_scored_yaml and r2_scored_yaml:
-            out_path = outdir / "yaml.txt" if outdir else None
+            out_path = outdir / "yaml_diff.txt" if outdir else None
             compare_yaml(r1_scored_yaml, r2_scored_yaml, out_path)
         else:
             logger.warning(
@@ -424,13 +424,15 @@ def compare_variant_score(
         comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
         logger.info(comparison_str)
 
+    # Always print sub scores in output files
+    sub_scores_in_file = True
     # Print all to the out dir
     for variant in above_thres_variants:
-        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        comparison_str = variant.r1.get_comparison_str(variant.r2, sub_scores_in_file)
         print(comparison_str, file=out_above_thres)
 
     for variant in diff_scored_variants:
-        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        comparison_str = variant.r1.get_comparison_str(variant.r2, sub_scores_in_file)
         print(comparison_str, file=out_all)
 
     if out_above_thres:
