@@ -2,7 +2,7 @@ import gzip
 import logging
 from pathlib import Path
 import re
-from typing import Dict, Generic, List, Set, TextIO, TypeVar, Union
+from typing import Dict, Generic, List, Optional, Set, TextIO, TypeVar, Union
 
 T = TypeVar("T")
 
@@ -42,8 +42,8 @@ class ScoredVariant:
         pos: int,
         ref: str,
         alt: str,
-        rank_score: int | None,
-        sub_scores: dict[str, int],
+        rank_score: Optional[int],
+        sub_scores: Dict[str, int],
     ):
         self.chr = chr
         self.pos = pos
@@ -144,7 +144,7 @@ def do_comparison(set_1: Set[T], set_2: Set[T]) -> Comparison[T]:
 
 
 # FIXME: Next: Can I get the rank score categories from the VCF header?
-def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
+def parse_vcf(vcf: PathObj) -> Dict[str, ScoredVariant]:
 
     rank_score_pattern = re.compile("RankScore=.+:(-?\\w+);")
     rank_sub_scores_pattern = re.compile("RankResult=(-?\\d+(\\|-?\\d+)+)")

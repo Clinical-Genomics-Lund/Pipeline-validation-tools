@@ -223,8 +223,8 @@ def check_same_files(
 
 def compare_variant_score(
     shared_variants: Set[str],
-    variants_r1: dict[str, ScoredVariant],
-    variants_r2: dict[str, ScoredVariant],
+    variants_r1: Dict[str, ScoredVariant],
+    variants_r2: Dict[str, ScoredVariant],
     show_sub_scores: bool,
     score_threshold: int,
     max_count: int,
