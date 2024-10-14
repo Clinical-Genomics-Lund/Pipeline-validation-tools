@@ -236,9 +236,6 @@ def compare_variant_presence(
     for var in list(r2_only)[0:max_display]:
         print(variants_r2[var])
 
-    # LOG.info(f"Number variants r1: {len(variants_r1)}")
-    # LOG.info(f"Number variants r2: {len(variants_r2)}")
-
 
 def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj):
     with yaml_r1.get_filehandle() as r1_fh, yaml_r2.get_filehandle() as r2_fh:
