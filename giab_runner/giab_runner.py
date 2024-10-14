@@ -168,7 +168,6 @@ def write_run_log(
 def get_single_csv(
     config: ConfigParser, run_label: str, run_type: str, start_data: str
 ):
-
     assay = config[run_type]["assay"]
     case_id = config[run_type]["case"]
     case_dict = config[case_id]
