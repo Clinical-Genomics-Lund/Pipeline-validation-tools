@@ -65,6 +65,34 @@ class ScoredVariant:
     def get_rank_score_str(self) -> str:
         return str(self.rank_score) if self.rank_score is not None else ""
 
+    def get_comparison_str(
+        self, comp_var: "ScoredVariant", show_sub_scores: bool
+    ) -> str:
+
+        if (
+            self.chr != comp_var.chr
+            or self.pos != comp_var.pos
+            or self.ref != comp_var.ref
+            or self.alt != comp_var.alt
+        ):
+            raise ValueError(
+                f"Must compare the same variant. This: {str(self)} Other: {str(comp_var)}"
+            )
+
+        fields = [
+            self.chr,
+            str(self.pos),
+            f"{self.ref}/{self.alt}",
+            self.get_rank_score_str(),
+            comp_var.get_rank_score_str(),
+        ]
+        if show_sub_scores:
+            for sub_score_val in self.sub_scores.values():
+                fields.append(str(sub_score_val))
+            for sub_score_val in comp_var.sub_scores.values():
+                fields.append(str(sub_score_val))
+        return "\t".join(fields)
+
 
 class PathObj:
     def __init__(

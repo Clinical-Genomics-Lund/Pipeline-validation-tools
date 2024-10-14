@@ -36,6 +36,10 @@ VCF_SUFFIX = [".vcf", ".vcf.gz"]
 # Used to make the comparison function generic for PathObj and str
 
 
+# FIXME: Early message if the run folder seems incomplete
+# Break early? If not overriding
+
+
 def log_and_write(text: str, fh: Optional[TextIOWrapper]):
     logger.info(text)
     if fh is not None:
@@ -273,7 +277,7 @@ def compare_variant_score(
     out_fh = open(out_path, "w") if out_path else None
 
     log_and_write(
-        f"Number diffently scored above {score_threshold}: {len(diff_scored_any_above_thres)}",
+        f"Number differently scored above {score_threshold}: {len(diff_scored_any_above_thres)}",
         out_fh,
     )
     if len(diff_scored_any_above_thres) > max_count:
@@ -288,24 +292,25 @@ def compare_variant_score(
             header_fields.append(f"r2_{sub_score}")
     # FIXME: Looks like a util to extract here
     log_and_write("\t".join(header_fields), out_fh)
-    for variant in sorted(
+
+    sorted_diff_scored_variants = sorted(
         diff_scored_any_above_thres,
         key=lambda var: var.r1.get_rank_score(),
         reverse=True,
-    )[0:max_count]:
-        fields = [
-            variant.r1.chr,
-            str(variant.r1.pos),
-            f"{variant.r1.ref}/{variant.r1.alt}",
-            variant.r1.get_rank_score_str(),
-            variant.r2.get_rank_score_str(),
-        ]
-        if show_sub_scores:
-            for sub_score_val in variant.r1.sub_scores.values():
-                fields.append(str(sub_score_val))
-            for sub_score_val in variant.r2.sub_scores.values():
-                fields.append(str(sub_score_val))
-        log_and_write("\t".join(fields), out_fh)
+    )
+
+    # Only print a subset to STDOUT
+    for variant in sorted_diff_scored_variants[0:max_count]:
+        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        logger.info(comparison_str)
+
+    # Print all to the log file
+    for variant in sorted_diff_scored_variants:
+        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        print(comparison_str, file=out_fh)
+
+    if out_fh:
+        out_fh.close()
 
 
 def compare_variant_presence(
