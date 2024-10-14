@@ -13,6 +13,7 @@ from typing import (
 from collections import defaultdict
 import difflib
 
+from giab_evaluator.classes import DiffScoredVariant
 from util import (
     Comparison,
     ScoredVariant,
@@ -149,7 +150,9 @@ def main(
                 out_path_score_all,
             )
         else:
-            logger.warning("Skipping VCF comparison")
+            logger.warning(
+                f"At least one scored SNV VCF missing. Looking for the pattern: {config['settings']['scored_snv']}"
+            )
 
     if comparisons is None or "score_sv" in comparisons:
         logger.info("--- Comparing scored SV VCFs ---")
@@ -178,7 +181,9 @@ def main(
                 out_path_score_all,
             )
         else:
-            logger.warning("Skipping scored SV VCF comparison")
+            logger.warning(
+                f"At least one scored SV VCF missing. Looking for the pattern: {config['settings']['scored_sv']}"
+            )
 
     if comparisons is None or "yaml" in comparisons:
         logger.info("--- Comparing YAML ---")
@@ -189,7 +194,9 @@ def main(
             out_path = outdir / "yaml.txt" if outdir else None
             compare_yaml(r1_scored_yaml, r2_scored_yaml, out_path)
         else:
-            logger.warning("Skipping YAML comparison")
+            logger.warning(
+                f"At least Scout YAML missing. Looking for the pattern: {config['settings']['yaml']}"
+            )
 
 
 def check_same_files(
@@ -372,23 +379,6 @@ def compare_variant_score(
     out_path_all: Optional[Path],
 ):
 
-    class DiffScoredVariant:
-        def __init__(self, r1: ScoredVariant, r2: ScoredVariant):
-            self.r1 = r1
-            self.r2 = r2
-
-        def any_above_thres(self) -> bool:
-            r1_above_thres = (
-                r1_variant.rank_score is not None
-                and r1_variant.rank_score >= score_threshold
-            )
-            r2_above_thres = (
-                r2_variant.rank_score is not None
-                and r2_variant.rank_score >= score_threshold
-            )
-            any_above_thres = r1_above_thres or r2_above_thres
-            return any_above_thres
-
     diff_scored_variants: List[DiffScoredVariant] = []
 
     for var_key in shared_variants:
@@ -404,10 +394,11 @@ def compare_variant_score(
     )
 
     above_thres_variants = [
-        var for var in diff_scored_variants if var.any_above_thres()
+        var for var in diff_scored_variants if var.any_above_thres(score_threshold)
     ]
 
     out_above_thres = open(out_path_above_thres, "w") if out_path_above_thres else None
+    out_all = open(out_path_all, "w") if out_path_all else None
 
     logger.info(
         f"Number differently scored total: {len(diff_scored_variants)}",
@@ -440,10 +431,12 @@ def compare_variant_score(
 
     for variant in diff_scored_variants:
         comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
-        print(comparison_str, file=out_above_thres)
+        print(comparison_str, file=out_all)
 
     if out_above_thres:
         out_above_thres.close()
+    if out_all:
+        out_all.close()
 
 
 def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj, out_path: Optional[Path]):

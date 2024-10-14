@@ -1,8 +1,9 @@
-import gzip
 import logging
 from pathlib import Path
 import re
-from typing import Dict, Generic, List, Optional, Set, TextIO, TypeVar, Union
+from typing import Dict, Generic, List, Set, TypeVar, Union
+
+from classes import PathObj, ScoredVariant
 
 T = TypeVar("T")
 
@@ -27,120 +28,9 @@ def add_file_logger(logger: logging.Logger, log_path: str):
     logger.addHandler(file_handler)
 
 
-class Comparison(Generic[T]):
-    # After Python 3.7 a @dataclass can be used instead
-    def __init__(self, r1: Set[T], r2: Set[T], shared: Set[T]):
-        self.r1 = r1
-        self.r2 = r2
-        self.shared = shared
-
-
-class ScoredVariant:
-    def __init__(
-        self,
-        chr: str,
-        pos: int,
-        ref: str,
-        alt: str,
-        rank_score: Optional[int],
-        sub_scores: Dict[str, int],
-    ):
-        self.chr = chr
-        self.pos = pos
-        self.ref = ref
-        self.alt = alt
-        self.rank_score = rank_score
-        self.sub_scores = sub_scores
-
-    def __str__(self) -> str:
-        return f"{self.chr}:{self.pos} {self.ref}/{self.alt} (Score: {self.rank_score})"
-
-    def get_rank_score(self) -> int:
-        if self.rank_score is None:
-            raise ValueError(
-                "Rank score not present, check before using 'get_rank_score'"
-            )
-        return self.rank_score
-
-    def get_rank_score_str(self) -> str:
-        return str(self.rank_score) if self.rank_score is not None else ""
-
-    def get_comparison_str(
-        self, comp_var: "ScoredVariant", show_sub_scores: bool
-    ) -> str:
-
-        if (
-            self.chr != comp_var.chr
-            or self.pos != comp_var.pos
-            or self.ref != comp_var.ref
-            or self.alt != comp_var.alt
-        ):
-            raise ValueError(
-                f"Must compare the same variant. This: {str(self)} Other: {str(comp_var)}"
-            )
-
-        fields = [
-            self.chr,
-            str(self.pos),
-            f"{self.ref}/{self.alt}",
-            self.get_rank_score_str(),
-            comp_var.get_rank_score_str(),
-        ]
-        if show_sub_scores:
-            for sub_score_val in self.sub_scores.values():
-                fields.append(str(sub_score_val))
-            for sub_score_val in comp_var.sub_scores.values():
-                fields.append(str(sub_score_val))
-        return "\t".join(fields)
-
-
-class PathObj:
-    def __init__(
-        self,
-        path: Path,
-        run_id: str,
-        id_placeholder: str,
-        base_dir: Path,
-    ):
-        self.real_name = path.name
-        self.real_path = path
-
-        self.shared_name = path.name.replace(run_id, id_placeholder)
-        self.shared_path = path.with_name(self.shared_name)
-        self.relative_path = self.shared_path.relative_to(base_dir)
-
-        self.run_id = run_id
-        self.id_placeholder = id_placeholder
-
-        self.is_gzipped = path.suffix.endswith(".gz")
-
-    def check_valid_file(self) -> bool:
-        try:
-            if self.is_gzipped:
-                with gzip.open(str(self.real_path), "rt") as fh:
-                    fh.read(1)
-            else:
-                with open(str(self.real_path), "r") as fh:
-                    fh.read(1)
-        except:
-            return False
-        return True
-
-    def get_filehandle(self) -> TextIO:
-        if self.is_gzipped:
-            in_fh = gzip.open(str(self.real_path), "rt")
-        else:
-            in_fh = open(str(self.real_path), "r")
-        return in_fh
-
-    def __str__(self) -> str:
-        return str(self.relative_path)
-
-
 def get_files_ending_with(pattern: str, paths: List[PathObj]) -> List[PathObj]:
     re_pattern = re.compile(pattern)
     matching = [path for path in paths if re.search(re_pattern, str(path)) is not None]
-    # self.is_vcf = str(path).endswith(".vcf") or str(path).endswith(".vcf.gz")
     return matching
 
 
@@ -157,13 +47,27 @@ def get_single_file_ending_with(
 
 
 def any_is_parent(path: Path, names: List[str]) -> bool:
+    """
+    Among all parent dirs, does any match 'names'?
+    Useful to filter files in ignored folders
+    """
     for parent in path.parents:
         if parent.name in names:
             return True
     return False
 
 
+class Comparison(Generic[T]):
+
+    # After Python 3.7 a @dataclass can be used instead
+    def __init__(self, r1: Set[T], r2: Set[T], shared: Set[T]):
+        self.r1 = r1
+        self.r2 = r2
+        self.shared = shared
+
+
 def do_comparison(set_1: Set[T], set_2: Set[T]) -> Comparison[T]:
+    """Can compare both str and Path objects, thus the generics"""
     common = set_1 & set_2
     s1_only = set_1 - set_2
     s2_only = set_2 - set_1
@@ -171,7 +75,6 @@ def do_comparison(set_1: Set[T], set_2: Set[T]) -> Comparison[T]:
     return Comparison(s1_only, s2_only, common)
 
 
-# FIXME: Next: Can I get the rank score categories from the VCF header?
 def parse_vcf(vcf: PathObj) -> Dict[str, ScoredVariant]:
 
     rank_score_pattern = re.compile("RankScore=.+:(-?\\w+);")
