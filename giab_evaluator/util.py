@@ -1,11 +1,30 @@
-from configparser import ConfigParser
 import gzip
-from logging import Logger
+import logging
 from pathlib import Path
 import re
 from typing import Dict, Generic, List, Set, TextIO, TypeVar, Union
 
 T = TypeVar("T")
+
+
+def setup_stdout_logger() -> logging.Logger:
+    logger = logging.getLogger(__name__)
+    logger.setLevel(logging.INFO)
+
+    log_formatter = logging.Formatter("%(levelname)s: %(message)s")
+    stdout_handler = logging.StreamHandler()
+    stdout_handler.setLevel(logging.INFO)
+    stdout_handler.setFormatter(log_formatter)
+
+    logger.addHandler(stdout_handler)
+    return logger
+
+
+def add_file_logger(logger: logging.Logger, log_path: str):
+    log_formatter = logging.Formatter("%(levelname)s: %(message)s")
+    file_handler = logging.FileHandler(log_path)
+    file_handler.setFormatter(log_formatter)
+    logger.addHandler(file_handler)
 
 
 class Comparison(Generic[T]):
@@ -67,7 +86,7 @@ class PathObj:
 
         self.is_gzipped = path.suffix.endswith(".gz")
 
-    def check_valid_file(self, log: Logger) -> bool:
+    def check_valid_file(self) -> bool:
         try:
             if self.is_gzipped:
                 with gzip.open(str(self.real_path), "rt") as fh:
@@ -76,8 +95,6 @@ class PathObj:
                 with open(str(self.real_path), "r") as fh:
                     fh.read(1)
         except:
-            # FIXME: Is this how I want to do this
-            log.info(f"File {self.real_path} is not a valid file")
             return False
         return True
 
@@ -100,17 +117,14 @@ def get_files_ending_with(pattern: str, paths: List[PathObj]) -> List[PathObj]:
 
 
 def get_single_file_ending_with(
-    pattern: str, paths: List[PathObj], log: Logger
+    pattern: str, paths: List[PathObj]
 ) -> Union[PathObj, None]:
     matching = get_files_ending_with(pattern, paths)
 
     if len(matching) == 0:
-        log.warning(f"No files found matching {pattern}")
         return None
     elif len(matching) > 1:
-        log.warning(
-            f"Found {len(matching)} matching pattern {pattern}, only one match is allowed. Returning None."
-        )
+        raise ValueError(f"Only one matching file allowed, found: {matching}")
     return matching[0]
 
 
@@ -187,3 +201,30 @@ def parse_vcf(vcf: PathObj) -> dict[str, ScoredVariant]:
             variant = ScoredVariant(chr, pos, ref, alt, rank_score, sub_scores_dict)
             variants[key] = variant
     return variants
+
+
+def count_variants(vcf: PathObj) -> int:
+
+    nbr_entries = 0
+    with vcf.get_filehandle() as in_fh:
+        for line in in_fh:
+            line = line.rstrip()
+            if line.startswith("#"):
+                continue
+            nbr_entries += 1
+
+    return nbr_entries
+
+
+def get_files_in_dir(
+    dir: Path,
+    run_id: str,
+    run_id_placeholder: str,
+    base_dir: Path,
+) -> List[PathObj]:
+    processed_files_in_dir = [
+        PathObj(path, run_id, run_id_placeholder, base_dir)
+        for path in dir.rglob("*")
+        if path.is_file()
+    ]
+    return processed_files_in_dir
