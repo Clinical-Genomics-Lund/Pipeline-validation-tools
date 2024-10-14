@@ -412,12 +412,15 @@ def compare_variant_score(
     # Print header, optionally with sub scores
     first_shared_key = list(shared_variants)[0]
     header_fields = ["chr", "pos", "var", "r1", "r2"]
+    header_fields_w_subscores = header_fields.copy()
+    for sub_score in variants_r1[first_shared_key].sub_scores:
+        header_fields_w_subscores.append(f"r1_{sub_score}")
+    for sub_score in variants_r2[first_shared_key].sub_scores:
+        header_fields_w_subscores.append(f"r2_{sub_score}")
     if show_sub_scores:
-        for sub_score in variants_r1[first_shared_key].sub_scores:
-            header_fields.append(f"r1_{sub_score}")
-        for sub_score in variants_r2[first_shared_key].sub_scores:
-            header_fields.append(f"r2_{sub_score}")
-    log_and_write("\t".join(header_fields), out_above_thres)
+        logger.info("\t".join(header_fields_w_subscores))
+    else:
+        logger.info("\t".join(header_fields))
 
     # Only print a subset to STDOUT
     for variant in above_thres_variants[0:max_count]:
@@ -427,10 +430,12 @@ def compare_variant_score(
     # Always print sub scores in output files
     sub_scores_in_file = True
     # Print all to the out dir
+    print("\t".join(header_fields_w_subscores), file=out_above_thres)
     for variant in above_thres_variants:
         comparison_str = variant.r1.get_comparison_str(variant.r2, sub_scores_in_file)
         print(comparison_str, file=out_above_thres)
 
+    print("\t".join(header_fields_w_subscores), file=out_all)
     for variant in diff_scored_variants:
         comparison_str = variant.r1.get_comparison_str(variant.r2, sub_scores_in_file)
         print(comparison_str, file=out_all)

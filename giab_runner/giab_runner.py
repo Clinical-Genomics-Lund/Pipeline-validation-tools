@@ -61,7 +61,7 @@ def main(
         csv = get_single_csv(config, run_label, run_type, start_data)
     else:
         csv = get_trio_csv(config, run_label, run_type, start_data)
-    out_csv = results_dir / "giab.csv"
+    out_csv = results_dir / "run.csv"
     csv.write_to_file(str(out_csv))
 
     start_nextflow_command = build_start_nextflow_analysis_cmd(
@@ -231,8 +231,8 @@ def build_start_nextflow_analysis_cmd(
     stub_run: bool,
 ) -> List[str]:
 
-    out_dir = results_dir / "results"
-    cron_dir = results_dir / "cron"
+    out_dir = results_dir
+    cron_dir = results_dir
 
     start_nextflow_command = [
         start_nextflow_analysis_pl,
