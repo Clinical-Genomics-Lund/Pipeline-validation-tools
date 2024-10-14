@@ -21,6 +21,7 @@ import sys
 from logging import Logger
 from configparser import ConfigParser
 from typing import List, Dict, Optional
+from datetime import datetime
 
 from help_classes import Case, CsvEntry
 
@@ -72,6 +73,8 @@ def main(
     )
 
     start_run(start_nextflow_command, dry_run, skip_confirmation)
+
+    setup_results_links(config, results_dir, run_label, run_type)
 
 
 def build_run_label(
@@ -167,7 +170,6 @@ def get_single_csv(
 ):
 
     assay = config[run_type]["assay"]
-
     case_id = config[run_type]["case"]
     case_dict = config[case_id]
     case = parse_case(dict(case_dict), start_data, is_trio=False)
@@ -265,6 +267,32 @@ def start_run(
                 LOG.info("Exiting ...")
     else:
         LOG.info(joined_command)
+
+
+def setup_results_links(
+    config: ConfigParser, results_dir: Path, run_label: str, run_type: str
+):
+
+    assay = config[run_type]["assay"]
+
+    log_base_dir = config["settings"]["log_base_dir"]
+    trace_base_dir = config["settings"]["trace_base_dir"]
+    work_base_dir = config["settings"]["work_base_dir"]
+
+    current_date = datetime.now()
+    date_stamp = current_date.strftime("%Y-%m-%d")
+
+    log_link = results_dir / "nextflow.log"
+    trace_link = results_dir / "trace.txt"
+    work_link = results_dir / "work"
+
+    log_link_target = Path(f"{log_base_dir}/{run_label}.{assay}.{date_stamp}.log")
+    trace_link_target = Path(f"{trace_base_dir}/{run_label}.{assay}.trace.txt")
+    work_link_target = Path(f"{work_base_dir}/{run_label}.{assay}")
+
+    log_link.symlink_to(log_link_target)
+    trace_link.symlink_to(trace_link_target)
+    work_link.symlink_to(work_link_target)
 
 
 def parse_arguments():
