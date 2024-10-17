@@ -212,9 +212,11 @@ def parse_case(case_dict: Dict[str, str], start_data: str, is_trio: bool) -> Cas
     elif start_data == "bam":
         fw = case_dict["bam"]
         rv = case_dict["bam_bai"]
-    else:
+    elif start_data == "fq":
         fw = case_dict["fq_fw"]
         rv = case_dict["fq_rv"]
+    else:
+        raise ValueError(f"Unknown start_data, found: {start_data}, valid are vcf, bam, fq")
 
     case = Case(
         case_dict["id"],
