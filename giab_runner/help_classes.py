@@ -72,13 +72,13 @@ class CsvEntry:
         self.platform = "illumina"
         self.analysis = "NA"
 
-    def header_str(self):
+    def header_str(self) -> str:
         return ",".join(self.headers)
 
     def __getitem__(self, key: str) -> str:
         return getattr(self, key)
 
-    def __str__(self):
+    def __str__(self) -> str:
         rows: List[str] = []
         for case in self.cases:
             row: List[str] = []
