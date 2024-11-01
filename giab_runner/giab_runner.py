@@ -205,6 +205,10 @@ def get_trio_csv(
     for case_id in case_ids:
         case_dict = config[case_id]
         case = parse_case(dict(case_dict), start_data, is_trio=True)
+
+        if not Path(case.read1).exists() or not Path(case.read2).exists():
+            raise FileNotFoundError(f"One or both files missing: {case.read1} {case.read2}")
+
         cases.append(case)
 
     run_csv = CsvEntry(run_label, assay, cases, queue)
