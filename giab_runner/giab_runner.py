@@ -308,6 +308,18 @@ def setup_results_links(
     trace_link_target = Path(f"{trace_base_dir}/{run_label}.{assay}.trace.txt")
     work_link_target = Path(f"{work_base_dir}/{run_label}.{assay}")
 
+    if log_link.exists():
+        LOG.warning(f"{log_link} already exists, removing previous link")
+        log_link.unlink()
+
+    if trace_link.exists():
+        LOG.warning(f"{trace_link} already exists, removing previous link")
+        trace_link.unlink()
+
+    if work_link.exists():
+        LOG.warning(f"{work_link} already exists, removing previous link")
+        work_link.unlink()
+
     log_link.symlink_to(log_link_target)
     trace_link.symlink_to(trace_link_target)
     work_link.symlink_to(work_link_target)
