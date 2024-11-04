@@ -48,6 +48,7 @@ def main(
     config = ConfigParser()
     config.read(config_path)
 
+    check_valid_config_arguments(config, run_type, start_data)
     check_valid_repo(LOG, wgs_repo)
     check_valid_checkout(LOG, wgs_repo, checkout)
     checkout_repo(wgs_repo, checkout)
@@ -89,6 +90,14 @@ def main(
     setup_results_links(config, results_dir, run_label, run_type)
 
 
+def check_valid_config_arguments(config: ConfigParser, run_type: str, start_data: str):
+    if run_type not in config.keys():
+        raise ValueError(f"Valid config keys are: {config.keys()}")
+    valid_start_data = ["fq", "bam", "vcf"]
+    if start_data not in valid_start_data:
+        raise ValueError(f"Valid start_data types are: {', '.join(valid_start_data)}")
+
+
 def build_run_label(
     run_type: str, checkout: str, label: Optional[str], stub_run: bool, start_data: str
 ) -> str:
@@ -100,6 +109,11 @@ def build_run_label(
         label_parts.append("stub")
     label_parts.append(start_data)
     run_label = "-".join(label_parts)
+
+    if run_label.find("/") != -1:
+        LOG.warning(f"Found '/' characters in run label: {run_label}, replacing with '-'")
+        run_label = run_label.replace("/", "-")
+
     return run_label
 
 
