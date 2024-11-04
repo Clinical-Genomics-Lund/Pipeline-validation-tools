@@ -8,6 +8,7 @@ from .classes import PathObj, ScoredVariant
 T = TypeVar("T")
 
 
+
 def setup_stdout_logger() -> logging.Logger:
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)

@@ -1,10 +1,9 @@
+from io import TextIOWrapper
 from typing import Set, List, Dict, Optional
 from logging import Logger
 from pathlib import Path
 
 from .classes import DiffScoredVariant, ScoredVariant
-
-from .evaluator import log_and_write
 
 
 # FIXME: This needs further refactoring
@@ -23,6 +22,12 @@ def print_score_tables(
     variants_r2: Dict[str, ScoredVariant],
     show_sub_scores: bool,
 ):
+    # FIXME: What to do with this one?
+    def log_and_write(text: str, fh: Optional[TextIOWrapper]):
+        logger.info(text)
+        if fh is not None:
+            print(text, file=fh)
+
     out_above_thres = open(out_path_above_thres, "w") if out_path_above_thres else None
     out_all = open(out_path_all, "w") if out_path_all else None
 
