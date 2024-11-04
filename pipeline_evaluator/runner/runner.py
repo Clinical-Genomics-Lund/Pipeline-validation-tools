@@ -89,8 +89,8 @@ def main(
 
 
 def check_valid_config_arguments(config: ConfigParser, run_type: str, start_data: str):
-    if run_type not in config.keys():
-        raise ValueError(f"Valid config keys are: {config.keys()}")
+    if not config.has_section(run_type):
+        raise ValueError(f"Valid config keys are: {config.sections()}")
     valid_start_data = ["fq", "bam", "vcf"]
     if start_data not in valid_start_data:
         raise ValueError(f"Valid start_data types are: {', '.join(valid_start_data)}")
@@ -109,7 +109,9 @@ def build_run_label(
     run_label = "-".join(label_parts)
 
     if run_label.find("/") != -1:
-        LOG.warning(f"Found '/' characters in run label: {run_label}, replacing with '-'")
+        LOG.warning(
+            f"Found '/' characters in run label: {run_label}, replacing with '-'"
+        )
         run_label = run_label.replace("/", "-")
 
     return run_label
@@ -145,15 +147,16 @@ def get_git_id(repo: Path) -> str:
 
 def check_valid_repo(repo: Path) -> Tuple[int, str]:
     if not repo.exists():
-        return((1, f'The folder "{repo}" does not exist'))
+        return (1, f'The folder "{repo}" does not exist')
 
     if not repo.is_dir():
-        return((1, f'"{repo}" is not a folder'))
+        return (1, f'"{repo}" is not a folder')
 
     if not (repo / ".git").is_dir():
-        return((1, f'"{repo}" has no .git subdir. It should be a Git repository'))
+        return (1, f'"{repo}" has no .git subdir. It should be a Git repository')
 
     return (0, "")
+
 
 def check_valid_checkout(repo: Path, checkout_obj: str) -> Tuple[int, str]:
     results = subprocess.run(
@@ -165,7 +168,10 @@ def check_valid_checkout(repo: Path, checkout_obj: str) -> Tuple[int, str]:
     )
 
     if results.returncode != 0:
-        return (results.returncode, f"The string {checkout_obj} was not found in the repository")
+        return (
+            results.returncode,
+            f"The string {checkout_obj} was not found in the repository",
+        )
     return (0, "")
 
 
@@ -225,7 +231,9 @@ def get_trio_csv(
         case = parse_case(dict(case_dict), start_data, is_trio=True)
 
         if not Path(case.read1).exists() or not Path(case.read2).exists():
-            raise FileNotFoundError(f"One or both files missing: {case.read1} {case.read2}")
+            raise FileNotFoundError(
+                f"One or both files missing: {case.read1} {case.read2}"
+            )
 
         cases.append(case)
 
@@ -244,7 +252,9 @@ def parse_case(case_dict: Dict[str, str], start_data: str, is_trio: bool) -> Cas
         fw = case_dict["fq_fw"]
         rv = case_dict["fq_rv"]
     else:
-        raise ValueError(f"Unknown start_data, found: {start_data}, valid are vcf, bam, fq")
+        raise ValueError(
+            f"Unknown start_data, found: {start_data}, valid are vcf, bam, fq"
+        )
 
     case = Case(
         case_dict["id"],
@@ -304,7 +314,7 @@ def start_run(
             else:
                 LOG.info("Exiting ...")
         else:
-                subprocess.run(start_nextflow_command, check=True)
+            subprocess.run(start_nextflow_command, check=True)
     else:
         LOG.info(joined_command)
 
@@ -362,6 +372,7 @@ def main_wrapper(args: argparse.Namespace):
         args.queue,
         args.nostart,
     )
+
 
 def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--label", help="Something for you to use to remember the run")
