@@ -16,12 +16,10 @@ import argparse
 from pathlib import Path
 import subprocess
 import logging
-from pathlib import Path
 import sys
-from logging import Logger
 from configparser import ConfigParser
-from typing import List, Dict, Optional
 from datetime import datetime
+from typing import List, Dict, Optional, Tuple
 
 from help_classes import Case, CsvEntry
 
@@ -49,8 +47,8 @@ def main(
     config.read(config_path)
 
     check_valid_config_arguments(config, run_type, start_data)
-    check_valid_repo(LOG, wgs_repo)
-    check_valid_checkout(LOG, wgs_repo, checkout)
+    check_valid_repo(wgs_repo)
+    check_valid_checkout(wgs_repo, checkout)
     checkout_repo(wgs_repo, checkout)
 
     run_label = build_run_label(run_type, checkout, label, stub_run, start_data)
@@ -117,7 +115,7 @@ def build_run_label(
     return run_label
 
 
-def checkout_repo(repo: Path, commit: str):
+def checkout_repo(repo: Path, commit: str) -> Tuple[int, str]:
 
     LOG.info(f"Checking out: {commit} in {str(repo)}")
     results = subprocess.run(
@@ -128,11 +126,10 @@ def checkout_repo(repo: Path, commit: str):
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
-    if results.returncode != 0:
-        LOG.error(results.stderr)
+    return (results.returncode, results.stderr)
 
 
-def check_git_id(repo: Path) -> str:
+def get_git_id(repo: Path) -> str:
     result = subprocess.run(
         ["git", "log", "--oneline"],
         cwd=str(repo),
@@ -146,21 +143,19 @@ def check_git_id(repo: Path) -> str:
     return commit_hash
 
 
-def check_valid_repo(logger: Logger, repo: Path):
+def check_valid_repo(repo: Path) -> Tuple[int, str]:
     if not repo.exists():
-        logger.error(f'The folder "{repo}" does not exist')
-        sys.exit(1)
+        return((1, f'The folder "{repo}" does not exist'))
 
     if not repo.is_dir():
-        logger.error(f'"{repo}" is not a folder')
-        sys.exit(1)
+        return((1, f'"{repo}" is not a folder'))
 
     if not (repo / ".git").is_dir():
-        logger.error(f'"{repo}" has no .git subdir. It should be a Git repository')
-        sys.exit(1)
+        return((1, f'"{repo}" has no .git subdir. It should be a Git repository'))
 
+    return (0, "")
 
-def check_valid_checkout(logger: Logger, repo: Path, checkout_obj: str):
+def check_valid_checkout(repo: Path, checkout_obj: str) -> Tuple[int, str]:
     results = subprocess.run(
         ["git", "rev-parse", "--verify", checkout_obj],
         cwd=str(repo),
@@ -169,9 +164,9 @@ def check_valid_checkout(logger: Logger, repo: Path, checkout_obj: str):
         stderr=subprocess.PIPE,
     )
 
-    if not results.returncode == 0:
-        logger.error(f"The string {checkout_obj} was not found in the repository")
-        sys.exit(1)
+    if results.returncode != 0:
+        return (results.returncode, f"The string {checkout_obj} was not found in the repository")
+    return (0, "")
 
 
 def write_run_log(
@@ -245,9 +240,11 @@ def parse_case(case_dict: Dict[str, str], start_data: str, is_trio: bool) -> Cas
     elif start_data == "bam":
         fw = case_dict["bam"]
         rv = f"{fw}.bai"
-    else:
+    elif start_data == "fq":
         fw = case_dict["fq_fw"]
         rv = case_dict["fq_rv"]
+    else:
+        raise ValueError(f"Unknown start_data, found: {start_data}, valid are vcf, bam, fq")
 
     case = Case(
         case_dict["id"],
@@ -306,6 +303,8 @@ def start_run(
                 subprocess.run(start_nextflow_command, check=True)
             else:
                 LOG.info("Exiting ...")
+        else:
+                subprocess.run(start_nextflow_command, check=True)
     else:
         LOG.info(joined_command)
 
