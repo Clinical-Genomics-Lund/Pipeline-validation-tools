@@ -55,6 +55,15 @@ def main(
     run_label = build_run_label(run_type, checkout, label, stub_run, start_data)
 
     results_dir = base_dir / run_label
+    if results_dir.exists():
+        confirmation = input(
+            f"The results dir {results_dir} already exists. Do you want to proceed? (y/n) "
+        )
+
+        if confirmation != "y":
+            LOG.info("Exiting ...")
+            sys.exit(1)
+
     results_dir.mkdir(exist_ok=True, parents=True)
 
     run_log_path = results_dir / "run.log"
