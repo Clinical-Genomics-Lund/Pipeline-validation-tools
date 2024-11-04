@@ -11,6 +11,7 @@ from evaluator.evaluator import main_wrapper as eval_main_wrapper
 __version_info__ = ("1", "0", "0")
 __version__ = ".".join(__version_info__)
 
+
 def main():
     args = parse_arguments()
 
@@ -24,8 +25,10 @@ def main():
 
 def parse_arguments():
     parent_parser = argparse.ArgumentParser(description="Parent parser")
-    parent_parser.add_argument("--version", action="version", version=f"%(prog)s ({__version__})")
-    subparsers = parent_parser.add_subparsers(dest="subcommand", required=True)
+    parent_parser.add_argument(
+        "--version", action="version", version=f"%(prog)s ({__version__})"
+    )
+    subparsers = parent_parser.add_subparsers(dest="subcommand")
 
     run_parser = subparsers.add_parser("run", description="Run parser")
     runner_add_arguments(run_parser)
