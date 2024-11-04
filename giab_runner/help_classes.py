@@ -76,13 +76,13 @@ class CsvEntry:
         self.analysis = "NA"
         self.priority = priority or "grace-lowest"
 
-    def header_str(self):
+    def header_str(self) -> str:
         return ",".join(self.headers)
 
     def __getitem__(self, key: str) -> str:
         return getattr(self, key)
 
-    def __str__(self):
+    def __str__(self) -> str:
         rows: List[str] = []
         for case in self.cases:
             row: List[str] = []
