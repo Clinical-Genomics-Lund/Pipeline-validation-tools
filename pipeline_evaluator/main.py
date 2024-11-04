@@ -2,10 +2,10 @@
 
 import argparse
 
-from runner.giab_runner import add_arguments as runner_add_arguments
-from runner.giab_runner import main_wrapper as runner_main_wrapper
-from evaluator.giab_evaluator import add_arguments as eval_add_arguments
-from evaluator.giab_evaluator import main_wrapper as eval_main_wrapper
+from runner.runner import add_arguments as runner_add_arguments
+from runner.runner import main_wrapper as runner_main_wrapper
+from evaluator.evaluator import add_arguments as eval_add_arguments
+from evaluator.evaluator import main_wrapper as eval_main_wrapper
 
 
 __version_info__ = ("1", "0", "0")
@@ -23,13 +23,13 @@ def main():
 
 
 def parse_arguments():
-    parent_parser = argparse.ArgumentParser()
+    parent_parser = argparse.ArgumentParser(description="Parent parser")
     parent_parser.add_argument("--version", action="version", version=f"%(prog)s ({__version__})")
     subparsers = parent_parser.add_subparsers(dest="subcommand", required=True)
 
-    run_parser = subparsers.add_parser("run")
+    run_parser = subparsers.add_parser("run", description="Run parser")
     runner_add_arguments(run_parser)
-    eval_parser = subparsers.add_parser("eval")
+    eval_parser = subparsers.add_parser("eval", description="Eval parser")
     eval_add_arguments(eval_parser)
 
     args = parent_parser.parse_args()
