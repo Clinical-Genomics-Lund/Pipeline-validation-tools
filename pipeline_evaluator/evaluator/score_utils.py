@@ -7,6 +7,9 @@ from .classes import DiffScoredVariant, ScoredVariant
 from .evaluator import log_and_write
 
 
+# FIXME: This needs further refactoring
+# It is doing too many things
+# Is it fine to load into memory?
 def print_score_tables(
     logger: Logger,
     out_path_above_thres: Optional[Path],
