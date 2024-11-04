@@ -218,10 +218,10 @@ def get_trio_csv(
 def parse_case(case_dict: Dict[str, str], start_data: str, is_trio: bool) -> Case:
     if start_data == "vcf":
         fw = case_dict["vcf"]
-        rv = case_dict["vcf_tbi"]
+        rv = f"{fw}.tbi"
     elif start_data == "bam":
         fw = case_dict["bam"]
-        rv = case_dict["bam_bai"]
+        rv = f"{fw}.bai"
     else:
         fw = case_dict["fq_fw"]
         rv = case_dict["fq_rv"]
