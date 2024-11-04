@@ -347,8 +347,23 @@ def setup_results_links(
     work_link.symlink_to(work_link_target)
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description=description)
+def main_wrapper(args: argparse.Namespace):
+    main(
+        args.config,
+        args.label,
+        args.checkout,
+        Path(args.baseout),
+        Path(args.repo),
+        args.start_data,
+        args.dry,
+        args.stub,
+        args.run_type,
+        args.skip_confirmation,
+        args.queue,
+        args.nostart,
+    )
+
+def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--label", help="Something for you to use to remember the run")
     parser.add_argument(
         "--checkout",
@@ -401,23 +416,10 @@ def parse_arguments():
         action="store_true",
         help="Run start_nextflow_analysis.pl with nostart, printing the path to the SLURM job only",
     )
-    args = parser.parse_args()
-    return args
 
 
 if __name__ == "__main__":
-    args = parse_arguments()
-    main(
-        args.config,
-        args.label,
-        args.checkout,
-        Path(args.baseout),
-        Path(args.repo),
-        args.start_data,
-        args.dry,
-        args.stub,
-        args.run_type,
-        args.skip_confirmation,
-        args.queue,
-        args.nostart,
-    )
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    args = parser.parse_args()
+    main_wrapper(args)

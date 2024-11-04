@@ -464,8 +464,7 @@ def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj, out_path: Optional[Path]):
         out_fh.close()
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description=description)
+def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--run_id1",
         "-i1",
@@ -494,12 +493,8 @@ def parse_arguments():
         help="Max number of top variants to print to STDOUT",
     )
     parser.add_argument("--outdir", help="Optional output folder to store result files")
-    args = parser.parse_args()
-    return args
 
-
-if __name__ == "__main__":
-    args = parse_arguments()
+def main_wrapper(args: argparse.Namespace):
     main(
         args.run_id1,
         args.run_id2,
@@ -512,3 +507,11 @@ if __name__ == "__main__":
         args.max_display,
         Path(args.outdir) if args.outdir is not None else None,
     )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    args = parser.parse_args()
+
+
