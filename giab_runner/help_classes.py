@@ -48,6 +48,7 @@ class CsvEntry:
         "read1",
         "read2",
         "analysis",
+        "priority",
     ]
 
     case_headers = [
@@ -62,7 +63,9 @@ class CsvEntry:
         "read2",
     ]
 
-    def __init__(self, group: str, assay: str, cases: List[Case]):
+    def __init__(
+        self, group: str, assay: str, cases: List[Case], priority: Optional[str]
+    ):
         self.cases = cases
 
         self.assay = assay
@@ -71,6 +74,7 @@ class CsvEntry:
         self.diagnosis = "NA"
         self.platform = "illumina"
         self.analysis = "NA"
+        self.priority = priority or "grace-lowest"
 
     def header_str(self) -> str:
         return ",".join(self.headers)

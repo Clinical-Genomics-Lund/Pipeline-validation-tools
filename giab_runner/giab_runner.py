@@ -18,6 +18,7 @@ import subprocess
 import logging
 import sys
 from configparser import ConfigParser
+from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
 from help_classes import Case, CsvEntry
@@ -38,6 +39,8 @@ def main(
     stub_run: bool,
     run_type: str,
     skip_confirmation: bool,
+    queue: Optional[str],
+    no_start: bool,
 ):
 
     config = ConfigParser()
@@ -67,10 +70,10 @@ def main(
     write_run_log(run_log_path, run_type, label or "no label", checkout, config)
 
     if not config.getboolean(run_type, "trio"):
-        csv = get_single_csv(config, run_label, run_type, start_data)
+        csv = get_single_csv(config, run_label, run_type, start_data, queue)
     else:
-        csv = get_trio_csv(config, run_label, run_type, start_data)
-    out_csv = results_dir / "giab.csv"
+        csv = get_trio_csv(config, run_label, run_type, start_data, queue)
+    out_csv = results_dir / "run.csv"
     csv.write_to_file(str(out_csv))
 
     start_nextflow_command = build_start_nextflow_analysis_cmd(
@@ -78,9 +81,12 @@ def main(
         out_csv,
         results_dir,
         stub_run,
+        no_start,
     )
 
     start_run(start_nextflow_command, dry_run, skip_confirmation)
+
+    setup_results_links(config, results_dir, run_label, run_type)
 
 
 def build_run_label(
@@ -169,16 +175,21 @@ def write_run_log(
 
 
 def get_single_csv(
-    config: ConfigParser, run_label: str, run_type: str, start_data: str
+    config: ConfigParser,
+    run_label: str,
+    run_type: str,
+    start_data: str,
+    queue: Optional[str],
 ):
-
     assay = config[run_type]["assay"]
-
     case_id = config[run_type]["case"]
     case_dict = config[case_id]
     case = parse_case(dict(case_dict), start_data, is_trio=False)
 
-    run_csv = CsvEntry(run_label, assay, [case])
+    if not Path(case.read1).exists() or not Path(case.read2).exists():
+        raise FileNotFoundError(f"One or both files missing: {case.read1} {case.read2}")
+
+    run_csv = CsvEntry(run_label, assay, [case], queue)
     return run_csv
 
 
@@ -187,6 +198,7 @@ def get_trio_csv(
     run_label: str,
     run_type: str,
     start_data: str,
+    queue: Optional[str],
 ):
 
     assay = config[run_type]["assay"]
@@ -201,7 +213,7 @@ def get_trio_csv(
         case = parse_case(dict(case_dict), start_data, is_trio=True)
         cases.append(case)
 
-    run_csv = CsvEntry(run_label, assay, cases)
+    run_csv = CsvEntry(run_label, assay, cases, queue)
     return run_csv
 
 
@@ -237,10 +249,11 @@ def build_start_nextflow_analysis_cmd(
     csv: Path,
     results_dir: Path,
     stub_run: bool,
+    no_start: bool,
 ) -> List[str]:
 
-    out_dir = results_dir / "results"
-    cron_dir = results_dir / "cron"
+    out_dir = results_dir
+    cron_dir = results_dir
 
     start_nextflow_command = [
         start_nextflow_analysis_pl,
@@ -253,6 +266,9 @@ def build_start_nextflow_analysis_cmd(
     if stub_run:
         start_nextflow_command.append("--custom_flags")
         start_nextflow_command.append("'-stub-run'")
+
+    if no_start:
+        start_nextflow_command.append("--nostart")
 
     return start_nextflow_command
 
@@ -275,6 +291,32 @@ def start_run(
                 subprocess.run(start_nextflow_command, check=True)
     else:
         LOG.info(joined_command)
+
+
+def setup_results_links(
+    config: ConfigParser, results_dir: Path, run_label: str, run_type: str
+):
+
+    assay = config[run_type]["assay"]
+
+    log_base_dir = config["settings"]["log_base_dir"]
+    trace_base_dir = config["settings"]["trace_base_dir"]
+    work_base_dir = config["settings"]["work_base_dir"]
+
+    current_date = datetime.now()
+    date_stamp = current_date.strftime("%Y-%m-%d")
+
+    log_link = results_dir / "nextflow.log"
+    trace_link = results_dir / "trace.txt"
+    work_link = results_dir / "work"
+
+    log_link_target = Path(f"{log_base_dir}/{run_label}.{assay}.{date_stamp}.log")
+    trace_link_target = Path(f"{trace_base_dir}/{run_label}.{assay}.trace.txt")
+    work_link_target = Path(f"{work_base_dir}/{run_label}.{assay}")
+
+    log_link.symlink_to(log_link_target)
+    trace_link.symlink_to(trace_link_target)
+    work_link.symlink_to(work_link_target)
 
 
 def parse_arguments():
@@ -322,6 +364,15 @@ def parse_arguments():
         required=True,
         help="Config file in INI format containing information about run types and cases",
     )
+    parser.add_argument(
+        "--queue",
+        help="Optionally specify in which queue to run (i.e. low, grace-normal etc.)",
+    )
+    parser.add_argument(
+        "--nostart",
+        action="store_true",
+        help="Run start_nextflow_analysis.pl with nostart, printing the path to the SLURM job only",
+    )
     args = parser.parse_args()
     return args
 
@@ -339,4 +390,6 @@ if __name__ == "__main__":
         args.stub,
         args.run_type,
         args.skip_confirmation,
+        args.queue,
+        args.nostart,
     )
