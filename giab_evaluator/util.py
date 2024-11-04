@@ -120,6 +120,7 @@ def parse_vcf(vcf: PathObj) -> Dict[str, ScoredVariant]:
                     int(val) for val in rank_sub_scores_match.group(1).split("|")
                 ]
 
+            # FIXME: Part of the class?
             key = f"{chr}_{pos}_{ref}_{alt}"
             sub_scores_dict: Dict[str, int] = {}
             if rank_sub_scores is not None:

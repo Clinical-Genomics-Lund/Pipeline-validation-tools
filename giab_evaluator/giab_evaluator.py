@@ -29,6 +29,8 @@ from util import (
     setup_stdout_logger,
 )
 
+# FIXME: Think about rescored SNV
+
 logger = setup_stdout_logger()
 
 RUN_ID_PLACEHOLDER = "RUNID"
