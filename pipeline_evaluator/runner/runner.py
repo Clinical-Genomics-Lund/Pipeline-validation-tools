@@ -117,16 +117,17 @@ def build_run_label(
     return run_label
 
 
-def checkout_repo(repo: Path, commit: str) -> Tuple[int, str]:
+def checkout_repo(repo: Path, checkout_string: str) -> Tuple[int, str]:
 
-    LOG.info(f"Checking out: {commit} in {str(repo)}")
+    LOG.info(f"Checking out: {checkout_string} in {str(repo)}")
     results = subprocess.run(
-        ["git", "checkout", commit],
+        ["git", "checkout", checkout_string],
         cwd=str(repo),
         # text=True is supported from Python 3.7
         universal_newlines=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        check=True,
     )
     return (results.returncode, results.stderr)
 
@@ -396,7 +397,7 @@ def add_arguments(parser: argparse.ArgumentParser):
     )
     parser.add_argument(
         "--run_type",
-        help="Select run type from the config (i.e. giab-single, giab-trio, seracare ...)",
+        help="Select run type from the config (i.e. giab-single, giab-trio, seracare ...). Multiple comma-separated can be specified.",
         required=True,
     )
     parser.add_argument(
