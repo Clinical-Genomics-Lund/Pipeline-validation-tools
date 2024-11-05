@@ -25,6 +25,9 @@ class ScoredVariant:
     def __str__(self) -> str:
         return f"{self.chr}:{self.pos} {self.ref}/{self.alt} (Score: {self.rank_score})"
 
+    def get_simple_key(self) -> str:
+        return f"{self.chr}_{self.pos}_{self.ref}_{self.alt}"
+
     def get_rank_score(self) -> int:
         if self.rank_score is None:
             raise ValueError(

@@ -8,7 +8,6 @@ from .classes import PathObj, ScoredVariant
 T = TypeVar("T")
 
 
-
 def setup_stdout_logger() -> logging.Logger:
     logger = logging.getLogger(__name__)
     logger.setLevel(logging.INFO)
@@ -121,8 +120,6 @@ def parse_vcf(vcf: PathObj) -> Dict[str, ScoredVariant]:
                     int(val) for val in rank_sub_scores_match.group(1).split("|")
                 ]
 
-            # FIXME: Part of the class?
-            key = f"{chr}_{pos}_{ref}_{alt}"
             sub_scores_dict: Dict[str, int] = {}
             if rank_sub_scores is not None:
                 if rank_sub_score_names is None:
@@ -132,6 +129,7 @@ def parse_vcf(vcf: PathObj) -> Dict[str, ScoredVariant]:
                 ), f"Length of sub score names and values should match, found {rank_sub_score_names} and {rank_sub_scores_match} in line: {line}"
                 sub_scores_dict = dict(zip(rank_sub_score_names, rank_sub_scores))
             variant = ScoredVariant(chr, pos, ref, alt, rank_score, sub_scores_dict)
+            key = variant.get_simple_key()
             variants[key] = variant
     return variants
 
