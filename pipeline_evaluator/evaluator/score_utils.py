@@ -6,15 +6,42 @@ from pathlib import Path
 from .classes import DiffScoredVariant, ScoredVariant
 
 
+def get_table(
+    logger,
+    out_path,
+    variants,
+    max_count,
+    shared_variants,
+    variants_r1,
+    variants_r2,
+    show_sub_scores,
+) -> List[List[str]]:
+
+    first_shared_key = list(shared_variants)[0]
+    header_fields = ["chr", "pos", "var", "r1", "r2"]
+    if show_sub_scores:
+        for sub_score in variants_r1[first_shared_key].sub_scores:
+            header_fields.append(f"r1_{sub_score}")
+        for sub_score in variants_r2[first_shared_key].sub_scores:
+            header_fields.append(f"r2_{sub_score}")
+    rows = [header_fields]
+
+    for variant in variants:
+        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
+        rows.append(comparison_str)
+
+    return rows
+
+
 # FIXME: This needs further refactoring
 # It is doing too many things
 # Is it fine to load into memory?
+# Rethink - It is doing too many things. Printing to STDOUT and file. Printing full and part.
 def print_score_tables(
     logger: Logger,
     out_path_above_thres: Optional[Path],
     out_path_all: Optional[Path],
     diff_scored_variants: List[DiffScoredVariant],
-    score_threshold: int,
     above_thres_variants: List[DiffScoredVariant],
     max_count: int,
     shared_variants: Set[str],
@@ -22,23 +49,9 @@ def print_score_tables(
     variants_r2: Dict[str, ScoredVariant],
     show_sub_scores: bool,
 ):
-    # FIXME: What to do with this one?
-    def log_and_write(text: str, fh: Optional[TextIOWrapper]):
-        logger.info(text)
-        if fh is not None:
-            print(text, file=fh)
 
     out_above_thres = open(out_path_above_thres, "w") if out_path_above_thres else None
     out_all = open(out_path_all, "w") if out_path_all else None
-
-    logger.info(
-        f"Number differently scored total: {len(diff_scored_variants)}",
-    )
-    logger.info(
-        f"Number differently scored above {score_threshold}: {len(above_thres_variants)}",
-    )
-    if len(above_thres_variants) > max_count:
-        log_and_write(f"Only printing the {max_count} first", out_above_thres)
 
     # Print header, optionally with sub scores
     first_shared_key = list(shared_variants)[0]

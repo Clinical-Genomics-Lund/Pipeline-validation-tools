@@ -13,7 +13,7 @@ from typing import (
 from collections import defaultdict
 import difflib
 
-from .score_utils import print_score_tables
+from .score_utils import print_score_tables, get_table
 from .classes import DiffScoredVariant
 from .util import (
     Comparison,
@@ -398,18 +398,40 @@ def compare_variant_score(
         var for var in diff_scored_variants if var.any_above_thres(score_threshold)
     ]
 
+    logger.info(
+        f"Number differently scored total: {len(diff_scored_variants)}",
+    )
+    logger.info(
+        f"Number differently scored above {score_threshold}: {len(above_thres_variants)}",
+    )
+
+    # FIXME: Continue refactor here
+
+    if len(above_thres_variants) > max_count:
+        logger.info(f"Only printing the {max_count} first")
+
     print_score_tables(
         logger,
         out_path_above_thres,
         out_path_all,
         diff_scored_variants,
-        score_threshold,
         above_thres_variants,
         max_count,
         shared_variants,
         variants_r1,
         variants_r2,
         show_sub_scores,
+    )
+
+    get_table(
+        logger,
+        out_path_above_thres,
+        above_thres_variants,
+        max_count,
+        shared_variants,
+        variants_r1,
+        variants_r2,
+        show_sub_scores=False,
     )
 
 
