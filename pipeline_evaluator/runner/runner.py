@@ -84,6 +84,9 @@ def main(
     )
 
     start_run(start_nextflow_command, dry_run, skip_confirmation)
+    write_resume_script(
+        results_dir, config["settings"]["start_nextflow_analysis"], out_csv, stub_run
+    )
 
     setup_results_links(config, results_dir, run_label, run_type)
 
@@ -318,6 +321,19 @@ def start_run(
             subprocess.run(start_nextflow_command, check=True)
     else:
         LOG.info(joined_command)
+
+
+def write_resume_script(results_dir: Path, run_command: str, csv: Path, stub_run: bool):
+    resume_command_parts = [
+        run_command,
+        str(csv.absolute()),
+    ]
+    if stub_run:
+        resume_command_parts.append("--custom_flags")
+        resume_command_parts.append("'-stub-run'")
+    resume_command = " ".join(resume_command_parts)
+    resume_script = results_dir / "resume.sh"
+    resume_script.write_text(resume_command)
 
 
 def setup_results_links(
