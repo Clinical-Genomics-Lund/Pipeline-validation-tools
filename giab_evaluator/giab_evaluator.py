@@ -68,6 +68,14 @@ def main(
     config = ConfigParser()
     config.read(config_path)
 
+<<<<<<< Updated upstream:giab_evaluator/giab_evaluator.py
+=======
+    if comparisons is not None:
+        valid_comparisons = set(["default", "file", "vcf", "score", "score_sv", "yaml"])
+        if len(comparisons & valid_comparisons) == 0:
+            raise ValueError(f"Valid comparisons are: {valid_comparisons}, found: {comparisons}")
+
+>>>>>>> Stashed changes:pipeline_evaluator/evaluator/evaluator.py
     if not results1_dir.exists() or not results2_dir.exists():
         r1_exists = results1_dir.exists()
         r2_exists = results2_dir.exists()
