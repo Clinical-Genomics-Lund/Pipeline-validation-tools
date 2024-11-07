@@ -48,7 +48,7 @@ def parse_arguments():
         "-v", "--version", action="version", version="%(prog)s (" + __version__ + ")"
     )
 
-    subparsers = parent_parser.add_subparsers(dest="subcommand", required=True)
+    subparsers = parent_parser.add_subparsers(dest="subcommand")
 
     add_generate_samplesheets(subparsers)
     start_runs(subparsers)

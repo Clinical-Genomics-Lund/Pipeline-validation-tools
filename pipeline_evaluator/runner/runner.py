@@ -21,7 +21,7 @@ from configparser import ConfigParser
 from datetime import datetime
 from typing import List, Dict, Optional, Tuple
 
-from help_classes import Case, CsvEntry
+from .help_classes import Case, CsvEntry
 
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -46,24 +46,23 @@ def main(
     config = ConfigParser()
     config.read(config_path)
 
-    # FIXME: How can the same function be performed, with the exit on
-    # the top level, but in a more visually appealing way?
-    result = check_valid_repo(wgs_repo)
-    if result[0] != 0:
-        LOG.error(result[1])
-        sys.exit(1)
-    result = check_valid_checkout(wgs_repo, checkout)
-    if result[0] != 0:
-        LOG.error(result[1])
-        sys.exit(1)
-    result = checkout_repo(wgs_repo, checkout)
-    if result[0] != 0:
-        LOG.error(result[1])
-        sys.exit(1)
+    check_valid_config_arguments(config, run_type, start_data)
+    check_valid_repo(wgs_repo)
+    check_valid_checkout(wgs_repo, checkout)
+    checkout_repo(wgs_repo, checkout)
 
     run_label = build_run_label(run_type, checkout, label, stub_run, start_data)
 
     results_dir = base_dir / run_label
+    if results_dir.exists():
+        confirmation = input(
+            f"The results dir {results_dir} already exists. Do you want to proceed? (y/n) "
+        )
+
+        if confirmation != "y":
+            LOG.info("Exiting ...")
+            sys.exit(1)
+
     results_dir.mkdir(exist_ok=True, parents=True)
 
     run_log_path = results_dir / "run.log"
@@ -85,8 +84,19 @@ def main(
     )
 
     start_run(start_nextflow_command, dry_run, skip_confirmation)
+    write_resume_script(
+        results_dir, config["settings"]["start_nextflow_analysis"], out_csv, stub_run
+    )
 
     setup_results_links(config, results_dir, run_label, run_type)
+
+
+def check_valid_config_arguments(config: ConfigParser, run_type: str, start_data: str):
+    if not config.has_section(run_type):
+        raise ValueError(f"Valid config keys are: {config.sections()}")
+    valid_start_data = ["fq", "bam", "vcf"]
+    if start_data not in valid_start_data:
+        raise ValueError(f"Valid start_data types are: {', '.join(valid_start_data)}")
 
 
 def build_run_label(
@@ -100,19 +110,27 @@ def build_run_label(
         label_parts.append("stub")
     label_parts.append(start_data)
     run_label = "-".join(label_parts)
+
+    if run_label.find("/") != -1:
+        LOG.warning(
+            f"Found '/' characters in run label: {run_label}, replacing with '-'"
+        )
+        run_label = run_label.replace("/", "-")
+
     return run_label
 
 
-def checkout_repo(repo: Path, commit: str) -> Tuple[int, str]:
+def checkout_repo(repo: Path, checkout_string: str) -> Tuple[int, str]:
 
-    LOG.info(f"Checking out: {commit} in {str(repo)}")
+    LOG.info(f"Checking out: {checkout_string} in {str(repo)}")
     results = subprocess.run(
-        ["git", "checkout", commit],
+        ["git", "checkout", checkout_string],
         cwd=str(repo),
         # text=True is supported from Python 3.7
         universal_newlines=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        check=True,
     )
     return (results.returncode, results.stderr)
 
@@ -133,15 +151,16 @@ def get_git_id(repo: Path) -> str:
 
 def check_valid_repo(repo: Path) -> Tuple[int, str]:
     if not repo.exists():
-        return((1, f'The folder "{repo}" does not exist'))
+        return (1, f'The folder "{repo}" does not exist')
 
     if not repo.is_dir():
-        return((1, f'"{repo}" is not a folder'))
+        return (1, f'"{repo}" is not a folder')
 
     if not (repo / ".git").is_dir():
-        return((1, f'"{repo}" has no .git subdir. It should be a Git repository'))
+        return (1, f'"{repo}" has no .git subdir. It should be a Git repository')
 
     return (0, "")
+
 
 def check_valid_checkout(repo: Path, checkout_obj: str) -> Tuple[int, str]:
     results = subprocess.run(
@@ -153,7 +172,10 @@ def check_valid_checkout(repo: Path, checkout_obj: str) -> Tuple[int, str]:
     )
 
     if results.returncode != 0:
-        return (results.returncode, f"The string {checkout_obj} was not found in the repository")
+        return (
+            results.returncode,
+            f"The string {checkout_obj} was not found in the repository",
+        )
     return (0, "")
 
 
@@ -211,6 +233,12 @@ def get_trio_csv(
     for case_id in case_ids:
         case_dict = config[case_id]
         case = parse_case(dict(case_dict), start_data, is_trio=True)
+
+        if not Path(case.read1).exists() or not Path(case.read2).exists():
+            raise FileNotFoundError(
+                f"One or both files missing: {case.read1} {case.read2}"
+            )
+
         cases.append(case)
 
     run_csv = CsvEntry(run_label, assay, cases, queue)
@@ -220,15 +248,17 @@ def get_trio_csv(
 def parse_case(case_dict: Dict[str, str], start_data: str, is_trio: bool) -> Case:
     if start_data == "vcf":
         fw = case_dict["vcf"]
-        rv = case_dict["vcf_tbi"]
+        rv = f"{fw}.tbi"
     elif start_data == "bam":
         fw = case_dict["bam"]
-        rv = case_dict["bam_bai"]
+        rv = f"{fw}.bai"
     elif start_data == "fq":
         fw = case_dict["fq_fw"]
         rv = case_dict["fq_rv"]
     else:
-        raise ValueError(f"Unknown start_data, found: {start_data}, valid are vcf, bam, fq")
+        raise ValueError(
+            f"Unknown start_data, found: {start_data}, valid are vcf, bam, fq"
+        )
 
     case = Case(
         case_dict["id"],
@@ -288,9 +318,22 @@ def start_run(
             else:
                 LOG.info("Exiting ...")
         else:
-                subprocess.run(start_nextflow_command, check=True)
+            subprocess.run(start_nextflow_command, check=True)
     else:
         LOG.info(joined_command)
+
+
+def write_resume_script(results_dir: Path, run_command: str, csv: Path, stub_run: bool):
+    resume_command_parts = [
+        run_command,
+        str(csv.absolute()),
+    ]
+    if stub_run:
+        resume_command_parts.append("--custom_flags")
+        resume_command_parts.append("'-stub-run'")
+    resume_command = " ".join(resume_command_parts)
+    resume_script = results_dir / "resume.sh"
+    resume_script.write_text(resume_command)
 
 
 def setup_results_links(
@@ -314,13 +357,41 @@ def setup_results_links(
     trace_link_target = Path(f"{trace_base_dir}/{run_label}.{assay}.trace.txt")
     work_link_target = Path(f"{work_base_dir}/{run_label}.{assay}")
 
+    if log_link.exists():
+        LOG.warning(f"{log_link} already exists, removing previous link")
+        log_link.unlink()
+
+    if trace_link.exists():
+        LOG.warning(f"{trace_link} already exists, removing previous link")
+        trace_link.unlink()
+
+    if work_link.exists():
+        LOG.warning(f"{work_link} already exists, removing previous link")
+        work_link.unlink()
+
     log_link.symlink_to(log_link_target)
     trace_link.symlink_to(trace_link_target)
     work_link.symlink_to(work_link_target)
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description=description)
+def main_wrapper(args: argparse.Namespace):
+    main(
+        args.config,
+        args.label,
+        args.checkout,
+        Path(args.baseout),
+        Path(args.repo),
+        args.start_data,
+        args.dry,
+        args.stub,
+        args.run_type,
+        args.skip_confirmation,
+        args.queue,
+        args.nostart,
+    )
+
+
+def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument("--label", help="Something for you to use to remember the run")
     parser.add_argument(
         "--checkout",
@@ -342,7 +413,7 @@ def parse_arguments():
     )
     parser.add_argument(
         "--run_type",
-        help="Select run type from the config (i.e. giab-single, giab-trio, seracare ...)",
+        help="Select run type from the config (i.e. giab-single, giab-trio, seracare ...). Multiple comma-separated can be specified.",
         required=True,
     )
     parser.add_argument(
@@ -373,23 +444,10 @@ def parse_arguments():
         action="store_true",
         help="Run start_nextflow_analysis.pl with nostart, printing the path to the SLURM job only",
     )
-    args = parser.parse_args()
-    return args
 
 
 if __name__ == "__main__":
-    args = parse_arguments()
-    main(
-        args.config,
-        args.label,
-        args.checkout,
-        Path(args.baseout),
-        Path(args.repo),
-        args.start_data,
-        args.dry,
-        args.stub,
-        args.run_type,
-        args.skip_confirmation,
-        args.queue,
-        args.nostart,
-    )
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    args = parser.parse_args()
+    main_wrapper(args)

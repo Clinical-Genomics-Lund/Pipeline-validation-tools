@@ -13,8 +13,9 @@ from typing import (
 from collections import defaultdict
 import difflib
 
-from classes import DiffScoredVariant
-from util import (
+from .score_utils import print_score_tables, get_table
+from .classes import DiffScoredVariant
+from .util import (
     Comparison,
     ScoredVariant,
     PathObj,
@@ -397,53 +398,41 @@ def compare_variant_score(
         var for var in diff_scored_variants if var.any_above_thres(score_threshold)
     ]
 
-    out_above_thres = open(out_path_above_thres, "w") if out_path_above_thres else None
-    out_all = open(out_path_all, "w") if out_path_all else None
-
     logger.info(
         f"Number differently scored total: {len(diff_scored_variants)}",
     )
     logger.info(
         f"Number differently scored above {score_threshold}: {len(above_thres_variants)}",
     )
+
+    # FIXME: Continue refactor here
+
     if len(above_thres_variants) > max_count:
-        log_and_write(f"Only printing the {max_count} first", out_above_thres)
+        logger.info(f"Only printing the {max_count} first")
 
-    # Print header, optionally with sub scores
-    first_shared_key = list(shared_variants)[0]
-    header_fields = ["chr", "pos", "var", "r1", "r2"]
-    header_fields_w_subscores = header_fields.copy()
-    for sub_score in variants_r1[first_shared_key].sub_scores:
-        header_fields_w_subscores.append(f"r1_{sub_score}")
-    for sub_score in variants_r2[first_shared_key].sub_scores:
-        header_fields_w_subscores.append(f"r2_{sub_score}")
-    if show_sub_scores:
-        logger.info("\t".join(header_fields_w_subscores))
-    else:
-        logger.info("\t".join(header_fields))
+    print_score_tables(
+        logger,
+        out_path_above_thres,
+        out_path_all,
+        diff_scored_variants,
+        above_thres_variants,
+        max_count,
+        shared_variants,
+        variants_r1,
+        variants_r2,
+        show_sub_scores,
+    )
 
-    # Only print a subset to STDOUT
-    for variant in above_thres_variants[0:max_count]:
-        comparison_str = variant.r1.get_comparison_str(variant.r2, show_sub_scores)
-        logger.info(comparison_str)
-
-    # Always print sub scores in output files
-    sub_scores_in_file = True
-    # Print all to the out dir
-    print("\t".join(header_fields_w_subscores), file=out_above_thres)
-    for variant in above_thres_variants:
-        comparison_str = variant.r1.get_comparison_str(variant.r2, sub_scores_in_file)
-        print(comparison_str, file=out_above_thres)
-
-    print("\t".join(header_fields_w_subscores), file=out_all)
-    for variant in diff_scored_variants:
-        comparison_str = variant.r1.get_comparison_str(variant.r2, sub_scores_in_file)
-        print(comparison_str, file=out_all)
-
-    if out_above_thres:
-        out_above_thres.close()
-    if out_all:
-        out_all.close()
+    get_table(
+        logger,
+        out_path_above_thres,
+        above_thres_variants,
+        max_count,
+        shared_variants,
+        variants_r1,
+        variants_r2,
+        show_sub_scores=False,
+    )
 
 
 def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj, out_path: Optional[Path]):
@@ -462,8 +451,7 @@ def compare_yaml(yaml_r1: PathObj, yaml_r2: PathObj, out_path: Optional[Path]):
         out_fh.close()
 
 
-def parse_arguments():
-    parser = argparse.ArgumentParser(description=description)
+def add_arguments(parser: argparse.ArgumentParser):
     parser.add_argument(
         "--run_id1",
         "-i1",
@@ -492,12 +480,9 @@ def parse_arguments():
         help="Max number of top variants to print to STDOUT",
     )
     parser.add_argument("--outdir", help="Optional output folder to store result files")
-    args = parser.parse_args()
-    return args
 
 
-if __name__ == "__main__":
-    args = parse_arguments()
+def main_wrapper(args: argparse.Namespace):
     main(
         args.run_id1,
         args.run_id2,
@@ -510,3 +495,9 @@ if __name__ == "__main__":
         args.max_display,
         Path(args.outdir) if args.outdir is not None else None,
     )
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    add_arguments(parser)
+    args = parser.parse_args()
